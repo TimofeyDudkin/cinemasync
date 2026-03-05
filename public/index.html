@@ -133,7 +133,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 #main-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
 #iframe-player{position:absolute;inset:0;width:100%;height:100%;border:none;display:none;background:#000}
-#yt-player iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+#yt-player{width:100%;height:100%}
+#yt-player iframe,#yt-player > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:none!important}
 
 /* ── GUEST OVERLAY — управление у гостя поверх плеера хоста */
 #guest-overlay{
@@ -520,7 +521,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
       <video id="main-video" preload="metadata"></video>
       <!-- YouTube IFrame API -->
       <div id="yt-wrap" style="position:absolute;inset:0;display:none;background:#000;z-index:1">
-        <div id="yt-player" style="width:100%;height:100%"></div>
+        <div id="yt-player"></div>
       </div>
       <!-- VK / Kinopoisk iframe -->
       <iframe id="iframe-player" allowfullscreen allow="autoplay;fullscreen;encrypted-media"></iframe>
@@ -1213,23 +1214,32 @@ function loadYouTube(videoId, orig) {
   currentSrc = 'youtube';
 
   if (!ytReady) { ytPendingId = videoId; return; }
-  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-    syncLockYT = true;
-    ytPlayer.loadVideoById(videoId);
-    setTimeout(() => syncLockYT = false, 1500);
-  } else {
-    _createYTPlayer(videoId);
+  // Always recreate player for reliable behavior
+  if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+    try { ytPlayer.destroy(); } catch(e) {}
+    ytPlayer = null;
   }
+  _createYTPlayer(videoId);
 }
 
 function _createYTPlayer(videoId) {
-  const div = document.getElementById('yt-player');
-  div.innerHTML = '';
+  // YT.Player replaces the target element with an <iframe>
+  // We need to re-create the div each time because YT destroys it
+  const wrap = document.getElementById('yt-wrap');
+  // Remove old player div and create fresh one
+  const old = document.getElementById('yt-player');
+  if (old) old.remove();
+  const newDiv = document.createElement('div');
+  newDiv.id = 'yt-player';
+  wrap.insertBefore(newDiv, wrap.firstChild);
+
   ytPlayer = new YT.Player('yt-player', {
+    width:  '100%',
+    height: '100%',
     videoId,
     playerVars: {
       autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1,
-      enablejsapi: 1, origin: location.origin
+      enablejsapi: 1
     },
     events: {
       onReady:       onYTReady,
@@ -1239,7 +1249,13 @@ function _createYTPlayer(videoId) {
 }
 
 function onYTReady(e) {
-  ytDuration = e.target.getDuration();
+  // Duration may be 0 before video loads — listen for it
+  e.target.playVideo();
+  // Poll duration until available
+  const checkDur = setInterval(() => {
+    const d = e.target.getDuration();
+    if (d > 0) { ytDuration = d; clearInterval(checkDur); }
+  }, 200);
   startYTProgress();
 }
 
