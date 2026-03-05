@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinemaSync — смотри вместе</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #07070f;
+  --s1:      #0e0e1c;
+  --s2:      #151526;
+  --s3:      #1c1c32;
+  --acc:     #b98aff;
+  --acc2:    #ff6eb4;
+  --acc3:    #3ecfbf;
+  --text:    #ede9ff;
+  --muted:   #6b6890;
+  --border:  rgba(185,138,255,.13);
+  --r:       16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+
+/* ─── GRAIN ─── */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  opacity:.5}
+
+/* ─── GLOWS ─── */
+.glow{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none;z-index:0}
+.g1{width:700px;height:700px;background:rgba(185,138,255,.055);top:-250px;left:-150px}
+.g2{width:500px;height:500px;background:rgba(255,110,180,.04);bottom:-150px;right:-100px}
+.g3{width:350px;height:350px;background:rgba(62,207,191,.03);top:40%;left:42%;transform:translate(-50%,-50%)}
+
+/* ─── SCREENS ─── */
+.screen{position:relative;z-index:1}
+
+/* ══════ LANDING ══════ */
+#landing{
+  height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:40px 20px;text-align:center;gap:0}
+
+.logo{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.logo-icon{
+  width:54px;height:54px;border-radius:15px;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:26px;box-shadow:0 0 28px rgba(185,138,255,.4)}
+.logo-name{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:2.2rem;
+  background:linear-gradient(135deg,var(--acc) 0%,var(--acc2) 55%,var(--acc3) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tagline{color:var(--muted);font-size:1.05rem;font-weight:300;margin-bottom:48px}
+
+.feat-row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:52px}
+.feat{
+  background:var(--s1);border:1px solid var(--border);border-radius:var(--r);
+  padding:24px 20px;width:180px;text-align:left;
+  transition:transform .2s,border-color .2s}
+.feat:hover{transform:translateY(-4px);border-color:rgba(185,138,255,.3)}
+.feat .fi{font-size:1.8rem;margin-bottom:10px}
+.feat h3{font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700;margin-bottom:5px}
+.feat p{font-size:.78rem;color:var(--muted);line-height:1.5}
+
+.land-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:24px}
+
+/* ─── Buttons ─── */
+.btn{
+  font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;
+  padding:13px 30px;border-radius:50px;border:none;cursor:pointer;
+  transition:all .2s;letter-spacing:.01em}
+.btn-p{
+  background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;
+  box-shadow:0 4px 20px rgba(185,138,255,.3)}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(185,138,255,.45)}
+.btn-s{background:var(--s1);color:var(--text);border:1px solid var(--border)}
+.btn-s:hover{border-color:rgba(185,138,255,.35);background:var(--s2)}
+.btn-ghost{
+  background:transparent;color:var(--muted);border:1px solid var(--border);
+  padding:9px 20px;font-size:.82rem}
+.btn-ghost:hover{color:var(--text);border-color:rgba(185,138,255,.3)}
+
+.icon-btn{
+  background:var(--s2);border:1px solid var(--border);color:var(--text);
+  width:42px;height:42px;border-radius:12px;padding:0;
+  display:flex;align-items:center;justify-content:center;font-size:1rem;
+  cursor:pointer;transition:all .2s;flex-shrink:0}
+.icon-btn:hover{border-color:rgba(185,138,255,.4);background:var(--s1)}
+.icon-btn.on{background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent;box-shadow:0 0 14px rgba(185,138,255,.4)}
+.icon-btn.red{background:rgba(255,75,75,.15);border-color:rgba(255,75,75,.3);color:#ff5050}
+.icon-btn.red:hover{background:rgba(255,75,75,.25)}
+
+.input{
+  background:var(--s1);border:1px solid var(--border);color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:.92rem;
+  padding:11px 18px;border-radius:50px;outline:none;transition:border-color .2s}
+.input::placeholder{color:var(--muted)}
+.input:focus{border-color:rgba(185,138,255,.45)}
+
+.join-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.join-row .input{width:260px}
+
+/* ══════ ROOM ══════ */
+#room{height:100vh;display:none;flex-direction:column}
+
+/* ─── Topbar ─── */
+.topbar{
+  height:56px;display:flex;align-items:center;gap:14px;padding:0 18px;
+  background:rgba(7,7,15,.92);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);flex-shrink:0;z-index:10}
+.topbar-logo{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.room-badge{
+  background:var(--s2);border:1px solid var(--border);border-radius:8px;
+  padding:3px 11px;font-size:.75rem;color:var(--muted);font-family:monospace;
+  cursor:pointer;transition:all .2s;user-select:all}
+.room-badge:hover{border-color:rgba(185,138,255,.35);color:var(--acc)}
+.spacer{flex:1}
+.status-row{display:flex;align-items:center;gap:7px}
+.dot{width:8px;height:8px;border-radius:50%;background:#ff5050;box-shadow:0 0 7px #ff5050;transition:all .4s}
+.dot.on{background:var(--acc3);box-shadow:0 0 7px var(--acc3);animation:pdot 2s infinite}
+.dot.wait{background:var(--acc);box-shadow:0 0 7px var(--acc);animation:pdot 1.2s infinite}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:.4}}
+.status-txt{font-size:.78rem;color:var(--muted)}
+
+/* ─── Main area ─── */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* ─── Video wrap ─── */
+.vwrap{flex:1;position:relative;background:#000;overflow:hidden}
+
+#main-video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:contain;background:#000;display:none}
+#iframe-player{
+  position:absolute;inset:0;width:100%;height:100%;
+  border:none;display:none;background:#000}
+
+.vplaceholder{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;color:var(--muted)}
+.vplaceholder .vph-icon{font-size:3.5rem;opacity:.25}
+.vplaceholder p{font-size:.9rem}
+.vph-pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.vph-pill{
+  border-radius:9px;padding:6px 14px;font-size:.78rem;border:1px solid}
+
+/* ─── Iframe note ─── */
+.iframe-note{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  background:rgba(7,7,15,.9);border:1px solid rgba(185,138,255,.18);
+  border-radius:10px;padding:5px 14px;font-size:.73rem;color:var(--muted);
+  z-index:20;pointer-events:none;white-space:nowrap;backdrop-filter:blur(12px);
+  display:none}
+
+/* ─── Sync indicator ─── */
+.sync-ind{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  background:rgba(7,7,15,.9);border:1px solid rgba(62,207,191,.35);
+  border-radius:20px;padding:5px 14px;font-size:.73rem;color:var(--acc3);
+  z-index:25;display:none;align-items:center;gap:6px;backdrop-filter:blur(12px)}
+.sync-ind.show{display:flex}
+.spin{
+  width:11px;height:11px;border:2px solid var(--acc3);
+  border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── Peer video (draggable) ─── */
+.peer-wrap{
+  position:absolute;bottom:88px;right:16px;
+  width:196px;height:134px;z-index:50;cursor:move;user-select:none}
+.peer-inner{
+  width:100%;height:100%;border-radius:13px;overflow:hidden;
+  border:2px solid rgba(185,138,255,.4);background:var(--s1);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);transition:box-shadow .2s}
+.peer-wrap:hover .peer-inner{box-shadow:0 8px 40px rgba(185,138,255,.25)}
+#peer-video{width:100%;height:100%;object-fit:cover;display:block}
+.peer-nocam{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;
+  background:var(--s1);color:var(--muted);font-size:.72rem}
+.peer-nocam .av{font-size:2rem}
+.peer-lbl{
+  position:absolute;bottom:5px;left:7px;font-size:.67rem;
+  background:rgba(0,0,0,.6);padding:2px 7px;border-radius:20px;color:var(--acc)}
+.peer-resize{
+  position:absolute;bottom:-8px;right:-8px;
+  width:20px;height:20px;background:var(--acc);border-radius:50%;
+  cursor:nwse-resize;z-index:51;display:flex;align-items:center;
+  justify-content:center;font-size:.55rem;color:#fff;
+  box-shadow:0 2px 8px rgba(185,138,255,.5)}
+
+/* ─── My video ─── */
+.my-wrap{
+  position:absolute;bottom:88px;left:16px;
+  width:168px;height:112px;border-radius:13px;overflow:hidden;
+  border:2px solid rgba(62,207,191,.4);z-index:50;background:var(--s1)}
+#my-video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.my-lbl{
+  position:absolute;bottom:5px;left:7px;font-size:.67rem;
+  background:rgba(0,0,0,.6);padding:2px 7px;border-radius:20px;color:var(--acc3)}
+
+/* ─── Video controls ─── */
+.vcontrols{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  display:none;align-items:center;gap:10px;
+  background:rgba(7,7,15,.88);backdrop-filter:blur(20px);
+  padding:9px 14px;border-radius:18px;border:1px solid var(--border);
+  z-index:40;white-space:nowrap}
+.prog-wrap{display:flex;align-items:center;gap:7px;min-width:100px}
+.prog-bar{
+  flex:1;height:3px;background:rgba(255,255,255,.13);
+  border-radius:2px;cursor:pointer;position:relative;overflow:hidden}
+.prog-fill{
+  height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));
+  border-radius:2px;width:0%;transition:width .1s}
+.time{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.vol-wrap{display:flex;align-items:center;gap:5px}
+.vol-sl{
+  -webkit-appearance:none;width:66px;height:3px;
+  background:rgba(255,255,255,.18);border-radius:2px;outline:none;cursor:pointer}
+.vol-sl::-webkit-slider-thumb{
+  -webkit-appearance:none;width:11px;height:11px;
+  background:var(--acc);border-radius:50%;cursor:pointer}
+.vdiv{width:1px;height:22px;background:var(--border)}
+.react-row{display:flex;gap:5px}
+.rbtn{
+  background:var(--s2);border:1px solid var(--border);border-radius:10px;
+  padding:5px 10px;cursor:pointer;font-size:1rem;transition:all .2s}
+.rbtn:hover{transform:scale(1.2);border-color:rgba(185,138,255,.4)}
+
+/* ─── Sidebar ─── */
+.sidebar{
+  width:308px;flex-shrink:0;display:flex;flex-direction:column;
+  background:var(--s1);border-left:1px solid var(--border)}
+
+.stabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.stab{
+  flex:1;padding:13px 6px;text-align:center;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:.76rem;font-weight:700;
+  color:var(--muted);transition:all .2s;border-bottom:2px solid transparent}
+.stab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.stab:hover:not(.on){color:var(--text);background:rgba(185,138,255,.04)}
+
+.panel{display:none;flex:1;flex-direction:column;overflow:hidden}
+.panel.on{display:flex}
+
+/* ─── Chat ─── */
+.msgs{
+  flex:1;overflow-y:auto;padding:14px;
+  display:flex;flex-direction:column;gap:10px;
+  scrollbar-width:thin;scrollbar-color:rgba(185,138,255,.15) transparent}
+.msg{max-width:82%;animation:min .22s ease}
+@keyframes min{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.msg.me{align-self:flex-end}
+.msg.them{align-self:flex-start}
+.msg.sys{align-self:center;max-width:100%}
+.bubble{padding:9px 13px;border-radius:13px;font-size:.85rem;line-height:1.5}
+.me .bubble{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-bottom-right-radius:3px}
+.them .bubble{background:var(--s2);border:1px solid var(--border);border-bottom-left-radius:3px}
+.sys .bubble{background:transparent;color:var(--muted);font-size:.76rem;text-align:center;font-style:italic}
+.msg-time{font-size:.66rem;color:var(--muted);margin-top:2px;padding:0 3px}
+.me .msg-time{text-align:right}
+
+.chat-foot{
+  padding:11px 14px;border-top:1px solid var(--border);
+  display:flex;gap:7px;flex-shrink:0}
+.chat-in{
+  flex:1;background:var(--s2);border:1px solid var(--border);
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:.85rem;
+  padding:9px 13px;border-radius:11px;outline:none;resize:none;
+  transition:border-color .2s;max-height:76px}
+.chat-in:focus{border-color:rgba(185,138,255,.4)}
+.chat-in::placeholder{color:var(--muted)}
+.send{
+  width:38px;height:38px;background:linear-gradient(135deg,var(--acc),var(--acc2));
+  border:none;border-radius:11px;color:#fff;font-size:.95rem;cursor:pointer;
+  transition:all .2s;align-self:flex-end;flex-shrink:0}
+.send:hover{transform:scale(1.06);box-shadow:0 4px 14px rgba(185,138,255,.4)}
+
+/* ─── Video panel ─── */
+.vpanel{padding:15px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:rgba(185,138,255,.15) transparent}
+.slabel{
+  font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.src-tabs{display:flex;gap:5px;flex-wrap:wrap}
+.src-btn{
+  display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:9px;
+  border:1px solid var(--border);background:var(--s2);color:var(--muted);
+  font-size:.76rem;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;transition:all .2s}
+.src-btn:hover{border-color:rgba(185,138,255,.3);color:var(--text)}
+.src-btn.on{color:#fff;border-color:transparent}
+.src-btn.yt.on{background:linear-gradient(135deg,#e00,#a00);box-shadow:0 0 10px rgba(220,0,0,.3)}
+.src-btn.vk.on{background:linear-gradient(135deg,#0077ff,#004db3);box-shadow:0 0 10px rgba(0,119,255,.3)}
+.src-btn.kp.on{background:linear-gradient(135deg,#ff5a00,#c44400);box-shadow:0 0 10px rgba(255,90,0,.3)}
+.src-btn.mp.on{background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 10px rgba(185,138,255,.3)}
+
+.vurl{
+  width:100%;background:var(--s2);border:1px solid var(--border);
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:.85rem;
+  padding:9px 13px;border-radius:11px;outline:none;transition:border-color .2s}
+.vurl:focus{border-color:rgba(185,138,255,.4)}
+.vurl::placeholder{color:var(--muted)}
+.hint{
+  font-size:.74rem;color:var(--muted);line-height:1.5;
+  background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.hint b{color:var(--acc)}
+.pl-item{
+  background:var(--s2);border:1px solid var(--border);border-radius:11px;
+  padding:9px 11px;cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;gap:9px;font-size:.82rem}
+.pl-item:hover{border-color:rgba(185,138,255,.3);background:rgba(185,138,255,.05)}
+.pl-item.on{border-color:var(--acc);background:rgba(185,138,255,.1)}
+.pl-ico{font-size:1.1rem;flex-shrink:0}
+.pl-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-del{color:var(--muted);padding:2px 6px;border-radius:6px;font-size:.72rem;cursor:pointer}
+.pl-del:hover{color:#ff5050;background:rgba(255,80,80,.1)}
+
+/* ─── Invite panel ─── */
+.ipanel{padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.ibox{
+  background:var(--s2);border:1px solid var(--border);border-radius:var(--r);
+  padding:18px;text-align:center;display:flex;flex-direction:column;gap:10px}
+.ibox .ii{font-size:2.2rem}
+.ibox h3{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700}
+.ibox p{font-size:.78rem;color:var(--muted);line-height:1.5}
+.ilink-row{display:flex;gap:7px}
+.ilink{
+  flex:1;background:var(--bg);border:1px solid var(--border);border-radius:9px;
+  padding:8px 11px;font-family:monospace;font-size:.7rem;color:var(--acc);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy-btn{
+  background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;
+  border-radius:9px;color:#fff;font-size:.8rem;padding:8px 14px;cursor:pointer;
+  font-family:'Syne',sans-serif;font-weight:700;white-space:nowrap;transition:all .2s}
+.copy-btn:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(185,138,255,.4)}
+.parts-list{font-size:.82rem;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.part-row{display:flex;align-items:center;gap:8px;padding:5px 0}
+.part-dot{width:7px;height:7px;border-radius:50%}
+
+/* ─── Call bar ─── */
+.callbar{
+  height:60px;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:rgba(7,7,15,.92);backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);flex-shrink:0}
+
+/* ─── Toast ─── */
+.toast{
+  position:fixed;bottom:72px;left:50%;
+  transform:translateX(-50%) translateY(16px);
+  background:rgba(7,7,15,.96);border:1px solid var(--border);
+  border-radius:11px;padding:9px 18px;font-size:.82rem;color:var(--text);
+  z-index:9000;opacity:0;transition:all .28s;pointer-events:none;
+  backdrop-filter:blur(20px);white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ─── Modal ─── */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.72);
+  backdrop-filter:blur(8px);z-index:8000;display:none;
+  align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{
+  background:var(--s1);border:1px solid var(--border);border-radius:22px;
+  padding:36px;max-width:400px;width:90%;text-align:center;
+  display:flex;flex-direction:column;gap:18px;
+  box-shadow:0 40px 80px rgba(0,0,0,.5);animation:mshow .25s ease}
+@keyframes mshow{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:scale(1)}}
+.modal h2{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800}
+.modal p{color:var(--muted);font-size:.87rem;line-height:1.6}
+.modal-btns{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+
+/* ─── Reactions float ─── */
+.freact{
+  position:fixed;pointer-events:none;font-size:2rem;z-index:9000;
+  animation:fup 2s ease forwards}
+@keyframes fup{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-140px) scale(1.4)}}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(185,138,255,.18);border-radius:2px}
+
+/* ─── Responsive ─── */
+@media(max-width:768px){
+  .sidebar{width:100%;height:38vh;border-left:none;border-top:1px solid var(--border)}
+  #room{flex-direction:column}
+  .main{flex-direction:column}
+  .feat-row{gap:10px}
+  .feat{width:150px}
+}
+</style>
+</head>
+<body>
+<div class="glow g1"></div>
+<div class="glow g2"></div>
+<div class="glow g3"></div>
+
+<!-- ══════════════ LANDING ══════════════ -->
+<div id="landing" class="screen">
+  <div class="logo">
+    <div class="logo-icon">🎬</div>
+    <span class="logo-name">CinemaSync</span>
+  </div>
+  <p class="tagline">Смотрите фильмы вместе — где бы вы ни были</p>
+
+  <div class="feat-row">
+    <div class="feat"><div class="fi">🎥</div><h3>Видео друг друга</h3><p>Видите лица во время просмотра</p></div>
+    <div class="feat"><div class="fi">⚡</div><h3>Синхронизация</h3><p>Play, Pause и перемотка — вместе</p></div>
+    <div class="feat"><div class="fi">🎙️</div><h3>Голос + чат</h3><p>Разговаривайте и переписывайтесь</p></div>
+    <div class="feat"><div class="fi">🔗</div><h3>Просто ссылка</h3><p>Никакой регистрации</p></div>
+  </div>
+
+  <div class="land-btns">
+    <button class="btn btn-p" onclick="createRoom()">✨ Создать комнату</button>
+    <button class="btn btn-s" onclick="toggleJoin()">🔗 Войти по коду</button>
+  </div>
+
+  <div id="join-wrap" style="display:none">
+    <div class="join-row">
+      <input class="input" id="join-input" placeholder="Код или ссылка приглашения" onkeydown="if(event.key==='Enter')doJoin()">
+      <button class="btn btn-p" onclick="doJoin()">Войти →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ ROOM ══════════════ -->
+<div id="room" class="screen">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <span class="topbar-logo">🎬 CinemaSync</span>
+    <span class="room-badge" id="room-badge" onclick="copyLink()" title="Скопировать ссылку"># <span id="room-id">------</span> 🔗</span>
+    <div class="spacer"></div>
+    <div class="status-row">
+      <div class="dot" id="dot"></div>
+      <span class="status-txt" id="status-txt">Подключение...</span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Video -->
+    <div class="vwrap" id="vwrap">
+      <video id="main-video" preload="metadata"></video>
+      <iframe id="iframe-player" allowfullscreen allow="autoplay;fullscreen;encrypted-media"></iframe>
+
+      <div class="vplaceholder" id="vph">
+        <div class="vph-icon">🎬</div>
+        <p>Выберите источник и вставьте ссылку →</p>
+        <div class="vph-pills">
+          <span class="vph-pill" style="background:rgba(220,0,0,.1);border-color:rgba(220,0,0,.3);color:#ff8080">▶ YouTube</span>
+          <span class="vph-pill" style="background:rgba(0,119,255,.1);border-color:rgba(0,119,255,.3);color:#80b0ff">VK Видео</span>
+          <span class="vph-pill" style="background:rgba(255,90,0,.1);border-color:rgba(255,90,0,.3);color:#ffaa80">🎞 Кинопоиск</span>
+          <span class="vph-pill" style="background:rgba(185,138,255,.08);border-color:rgba(185,138,255,.25);color:var(--acc)">📁 MP4</span>
+        </div>
+      </div>
+
+      <div class="iframe-note" id="iframe-note"></div>
+      <div class="sync-ind" id="sync-ind"><div class="spin"></div>Синхронизация...</div>
+
+      <!-- Peer cam -->
+      <div class="peer-wrap" id="peer-wrap">
+        <div class="peer-inner">
+          <video id="peer-video" autoplay playsinline></video>
+          <div class="peer-nocam" id="peer-nocam"><div class="av">👤</div><span>Нет камеры</span></div>
+        </div>
+        <div class="peer-lbl">Партнёр</div>
+        <div class="peer-resize" id="peer-resize">⤡</div>
+      </div>
+
+      <!-- My cam -->
+      <div class="my-wrap">
+        <video id="my-video" autoplay playsinline muted></video>
+        <div class="my-lbl">Вы</div>
+      </div>
+
+      <!-- Controls (mp4 only) -->
+      <div class="vcontrols" id="vcontrols">
+        <button class="icon-btn" id="btn-play" onclick="togglePlay()" style="width:36px;height:36px;border-radius:10px">▶</button>
+        <div class="prog-wrap">
+          <span class="time" id="tc">0:00</span>
+          <div class="prog-bar" id="prog-bar" onclick="seekClick(event)"><div class="prog-fill" id="prog-fill"></div></div>
+          <span class="time" id="tt">0:00</span>
+        </div>
+        <div class="vol-wrap">
+          <span style="font-size:.85rem;cursor:pointer" id="vol-icon" onclick="toggleMute()">🔊</span>
+          <input type="range" class="vol-sl" min="0" max="1" step="0.05" value="0.8" oninput="setVol(this.value)">
+        </div>
+        <div class="vdiv"></div>
+        <div class="react-row">
+          <div class="rbtn" onclick="react('❤️')">❤️</div>
+          <div class="rbtn" onclick="react('😂')">😂</div>
+          <div class="rbtn" onclick="react('😱')">😱</div>
+          <div class="rbtn" onclick="react('👏')">👏</div>
+        </div>
+        <div class="vdiv"></div>
+        <button class="icon-btn" onclick="toggleFS()" style="width:36px;height:36px;border-radius:10px">⛶</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="stabs">
+        <div class="stab on" onclick="tab('chat')">💬 Чат</div>
+        <div class="stab" onclick="tab('video')">🎬 Видео</div>
+        <div class="stab" onclick="tab('invite')">🔗 Invite</div>
+      </div>
+
+      <!-- Chat -->
+      <div class="panel on" id="panel-chat">
+        <div class="msgs" id="msgs">
+          <div class="msg sys"><div class="bubble">Добро пожаловать! Создайте комнату и пригласите партнёра 🎬</div></div>
+        </div>
+        <div class="chat-foot">
+          <textarea class="chat-in" id="chat-in" placeholder="Сообщение..." rows="1" onkeydown="chatKey(event)"></textarea>
+          <button class="send" onclick="sendChat()">↑</button>
+        </div>
+      </div>
+
+      <!-- Video -->
+      <div class="panel" id="panel-video">
+        <div class="vpanel">
+          <div class="slabel">Источник</div>
+          <div class="src-tabs">
+            <button class="src-btn yt on" id="src-youtube" onclick="setSrc('youtube')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2A3 3 0 0 0 21.4 4C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8A3 3 0 0 0 2.6 20c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.2C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>
+              YouTube
+            </button>
+            <button class="src-btn vk" id="src-vk" onclick="setSrc('vk')">🎬 VK</button>
+            <button class="src-btn kp" id="src-kinopoisk" onclick="setSrc('kinopoisk')">🎞 КП</button>
+            <button class="src-btn mp" id="src-mp4" onclick="setSrc('mp4')">📁 MP4</button>
+          </div>
+
+          <input class="vurl" id="vurl" placeholder="Вставьте ссылку..." oninput="autoSrc(this.value)">
+          <div class="hint" id="vhint"><b>YouTube:</b> youtube.com/watch?v=... или youtu.be/...</div>
+
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn btn-p" style="flex:1;padding:9px;font-size:.83rem" onclick="loadUrl()">▶ Открыть</button>
+            <label class="btn btn-s" style="flex:1;padding:9px;font-size:.83rem;text-align:center;cursor:pointer">
+              📁 Файл<input type="file" accept="video/*" style="display:none" onchange="loadFile(event)">
+            </label>
+          </div>
+
+          <div>
+            <div class="slabel">Плейлист</div>
+            <div id="playlist" style="display:flex;flex-direction:column;gap:6px"></div>
+          </div>
+
+          <div>
+            <div class="slabel">Демо-видео</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div class="pl-item" onclick="demo('bbb')"><span class="pl-ico">🐰</span><span class="pl-name">Big Buck Bunny (MP4, бесплатно)</span></div>
+              <div class="pl-item" onclick="demo('ed')"><span class="pl-ico">🐘</span><span class="pl-name">Elephants Dream (MP4, бесплатно)</span></div>
+              <div class="pl-item" onclick="demo('yt')"><span class="pl-ico" style="color:#ff8080">▶</span><span class="pl-name">YouTube демо</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Invite -->
+      <div class="panel" id="panel-invite">
+        <div class="ipanel">
+          <div class="ibox">
+            <div class="ii">🔗</div>
+            <h3>Пригласить партнёра</h3>
+            <p>Отправьте ссылку — партнёр войдёт автоматически</p>
+            <div class="ilink-row">
+              <div class="ilink" id="ilink">—</div>
+              <button class="copy-btn" onclick="copyLink()">Копировать</button>
+            </div>
+          </div>
+          <div class="ibox">
+            <div class="ii">👥</div>
+            <h3>Участники</h3>
+            <div class="parts-list" id="parts">
+              <div class="part-row">
+                <div class="part-dot" style="background:var(--acc3);box-shadow:0 0 5px var(--acc3)"></div>
+                Вы
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Call bar -->
+  <div class="callbar">
+    <button class="icon-btn" id="btn-cam" onclick="toggleCam()" title="Камера">📷</button>
+    <button class="icon-btn on" id="btn-mic" onclick="toggleMic()" title="Микрофон">🎙️</button>
+    <button class="icon-btn red" onclick="leaveRoom()" title="Выйти">📵</button>
+    <div class="vdiv"></div>
+    <button class="icon-btn" id="btn-screen" onclick="toggleScreen()" title="Экран">🖥️</button>
+    <button class="icon-btn" onclick="tab('chat')">💬</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2 id="modal-h"></h2>
+    <p id="modal-p"></p>
+    <div class="modal-btns" id="modal-btns"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CinemaSync — клиент
+//  Работает локально (file://) и на сервере (http/https)
+// ═══════════════════════════════════════════════════════
+
+const IS_SERVER = (location.protocol === 'http:' || location.protocol === 'https:');
+const WS_URL    = IS_SERVER
+  ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host
+  : null;
+
+const ICE_CFG = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' }
+]};
+
+// ── State
+let roomId      = null;
+let isHost      = false;
+let ws          = null;
+let pc          = null;
+let dc          = null;
+let localStream = null;
+let isCam       = false;
+let isMic       = false;
+let isScreen    = false;
+let syncLock    = false;
+let isMuted     = false;
+let playlist    = [];
+let currentSrc  = 'youtube';
+
+const vid   = document.getElementById('main-video');
+const myV   = document.getElementById('my-video');
+const peerV = document.getElementById('peer-video');
+
+// ══════════ LANDING ══════════
+
+function createRoom() {
+  roomId = rndId();
+  isHost = true;
+  enterRoom();
+}
+
+function toggleJoin() {
+  const w = document.getElementById('join-wrap');
+  w.style.display = w.style.display === 'none' ? 'block' : 'none';
+  if (w.style.display === 'block') document.getElementById('join-input').focus();
+}
+
+function doJoin() {
+  let v = document.getElementById('join-input').value.trim();
+  const m = v.match(/[?&]room=([A-Z0-9]{4,10})/i) || v.match(/([A-Z0-9]{4,10})/i);
+  if (m) v = m[1];
+  v = v.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (v.length < 4) { toast('Введите корректный код комнаты'); return; }
+  roomId = v;
+  isHost = false;
+  enterRoom();
+}
+
+function rndId() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+// ══════════ ENTER ROOM ══════════
+
+function enterRoom() {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('room').style.display = 'flex';
+  document.getElementById('room-id').textContent = roomId;
+
+  const link = IS_SERVER
+    ? (location.origin + '/?room=' + roomId)
+    : ('Откройте этот файл в браузере с ?room=' + roomId);
+  document.getElementById('ilink').textContent = IS_SERVER
+    ? (location.origin + '/?room=' + roomId)
+    : ('Код комнаты: ' + roomId);
+
+  // Обновляем URL только если не file://
+  if (IS_SERVER) {
+    try { history.replaceState({}, '', '/?room=' + roomId); } catch(e) {}
+  }
+
+  if (IS_SERVER && WS_URL) {
+    setupWS();
+  } else {
+    // Локальный режим — без сервера, через BroadcastChannel (для теста в одном браузере)
+    setStatus('wait', 'Локальный режим');
+    setupLocalMode();
+    setupMedia();
+    toast('Локальный режим: откройте в браузере с сервером для работы между устройствами');
+  }
+}
+
+// ══════════ LOCAL MODE (без сервера, тест в одном браузере) ══════════
+
+let localBC = null;
+
+function setupLocalMode() {
+  localBC = new BroadcastChannel('cs-' + roomId);
+
+  localBC.onmessage = async (e) => {
+    const msg = e.data;
+    if (msg.type === 'offer' && !isHost) {
+      await startPeerConnection(false);
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      localBC.postMessage({ type: 'answer', sdp: answer });
+    } else if (msg.type === 'answer' && isHost) {
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+    } else if (msg.type === 'ice') {
+      if (pc && msg.candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch(e) {}
+      }
+    } else if (msg.type === 'guest-here' && isHost) {
+      sysmsg('👋 Партнёр входит...');
+      await startPeerConnection(true);
+    } else if (msg.type === 'sync') {
+      handleSync(msg.payload);
+    }
+  };
+
+  if (!isHost) {
+    setTimeout(() => {
+      if (localBC) localBC.postMessage({ type: 'guest-here' });
+    }, 600);
+  } else {
+    setStatus('wait', 'Ожидание партнёра...');
+    sysmsg('🔗 Комната создана! Откройте эту страницу в другой вкладке с кодом: ' + roomId);
+  }
+}
+
+function localSend(data) {
+  if (localBC) localBC.postMessage(data);
+}
+
+// ══════════ WEBSOCKET (серверный режим) ══════════
+
+function setupWS() {
+  setStatus('wait', 'Подключение к серверу...');
+  try {
+    ws = new WebSocket(WS_URL);
+  } catch(e) {
+    setStatus('off', 'Ошибка подключения к серверу');
+    toast('Не удалось подключиться к серверу');
+    return;
+  }
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: isHost ? 'create' : 'join', roomId }));
+    setupMedia();
+  };
+
+  ws.onerror = () => { setStatus('off', 'Ошибка сервера'); };
+  ws.onclose = () => { setStatus('off', 'Нет связи с сервером'); };
+
+  ws.onmessage = async (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch(err) { return; }
+
+    switch (msg.type) {
+      case 'created':
+        setStatus('wait', 'Ожидание партнёра...');
+        sysmsg('🔗 Комната создана! Отправьте ссылку партнёру.');
+        break;
+      case 'joined':
+        setStatus('connecting', 'Установка соединения...');
+        break;
+      case 'error':
+        toast('❌ ' + msg.msg);
+        setStatus('off', msg.msg);
+        break;
+      case 'guest-joined':
+        sysmsg('👋 Партнёр входит...');
+        await startPeerConnection(true);
+        break;
+      case 'offer':
+        await startPeerConnection(false);
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        wsSend({ type: 'answer', sdp: answer });
+        break;
+      case 'answer':
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        break;
+      case 'ice':
+        if (pc && msg.candidate) {
+          try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch(e) {}
+        }
+        break;
+      case 'sync':
+        handleSync(msg.payload);
+        break;
+      case 'peer-left':
+        setStatus('off', 'Партнёр отключился');
+        sysmsg('🔴 Партнёр отключился');
+        document.getElementById('peer-nocam').style.display = 'flex';
+        break;
+    }
+  };
+}
+
+function wsSend(data) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(data));
+}
+
+// ══════════ MEDIA ══════════
+
+async function setupMedia() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    myV.srcObject = localStream;
+    isCam = true; isMic = true;
+    document.getElementById('btn-cam').classList.add('on');
+    document.getElementById('btn-mic').classList.add('on');
+  } catch(e) {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      isMic = true;
+      document.getElementById('btn-mic').classList.add('on');
+      toast('Камера недоступна — только аудио');
+    } catch(e2) {
+      toast('Нет доступа к камере/микрофону — только чат');
+    }
+  }
+}
+
+// ══════════ WEBRTC ══════════
+
+async function startPeerConnection(makeOffer) {
+  if (pc) { pc.close(); pc = null; }
+  pc = new RTCPeerConnection(ICE_CFG);
+
+  if (localStream) {
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  }
+
+  pc.ontrack = (e) => {
+    if (e.streams && e.streams[0]) {
+      peerV.srcObject = e.streams[0];
+      document.getElementById('peer-nocam').style.display = 'none';
+    }
+  };
+
+  pc.onicecandidate = (e) => {
+    if (!e.candidate) return;
+    const iceMsg = { type: 'ice', candidate: e.candidate };
+    if (IS_SERVER) wsSend(iceMsg);
+    else localSend(iceMsg);
+  };
+
+  pc.onconnectionstatechange = () => {
+    const s = pc.connectionState;
+    if (s === 'connected') {
+      setStatus('on', 'Подключено ✓');
+      sysmsg('🟢 Партнёр подключился!');
+      addPart('Партнёр');
+    } else if (s === 'connecting') {
+      setStatus('connecting', 'Соединение...');
+    } else if (s === 'disconnected' || s === 'failed') {
+      setStatus('off', 'Разрыв соединения');
+    }
+  };
+
+  if (makeOffer) {
+    dc = pc.createDataChannel('sync', { ordered: true });
+    setupDC(dc);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const offerMsg = { type: 'offer', sdp: offer };
+    if (IS_SERVER) wsSend(offerMsg);
+    else localSend(offerMsg);
+  } else {
+    pc.ondatachannel = (e) => { dc = e.channel; setupDC(dc); };
+  }
+}
+
+function setupDC(channel) {
+  channel.onopen    = () => console.log('DataChannel open');
+  channel.onmessage = (e) => {
+    try { handleSync(JSON.parse(e.data)); } catch(err) {}
+  };
+}
+
+// ══════════ SYNC ══════════
+
+function sendSync(payload) {
+  if (dc && dc.readyState === 'open') {
+    dc.send(JSON.stringify(payload));
+  } else if (IS_SERVER) {
+    wsSend({ type: 'sync', payload });
+  } else {
+    localSend({ type: 'sync', payload });
+  }
+}
+
+function handleSync(msg) {
+  switch (msg.type) {
+    case 'play':
+      syncLock = true;
+      vid.currentTime = msg.t;
+      vid.play();
+      showSyncInd();
+      setTimeout(() => { syncLock = false; }, 600);
+      break;
+    case 'pause':
+      syncLock = true;
+      vid.currentTime = msg.t;
+      vid.pause();
+      showSyncInd();
+      setTimeout(() => { syncLock = false; }, 600);
+      break;
+    case 'seek':
+      syncLock = true;
+      vid.currentTime = msg.t;
+      showSyncInd();
+      setTimeout(() => { syncLock = false; }, 300);
+      break;
+    case 'load-mp4':
+      loadVideoSrc(msg.src, msg.name, false);
+      break;
+    case 'load-embed':
+      loadIframe(msg.url, msg.label, msg.orig, msg.src_type);
+      break;
+    case 'chat':
+      addMsg(msg.text, 'them');
+      break;
+    case 'react':
+      floatReact(msg.e);
+      break;
+  }
+}
+
+// ══════════ SOURCE SELECTION ══════════
+
+const HINTS = {
+  youtube:   '<b>YouTube:</b> youtube.com/watch?v=... или youtu.be/...',
+  vk:        '<b>VK Видео:</b> vkvideo.ru/video-... или vk.com/video-...',
+  kinopoisk: '<b>Кинопоиск:</b> kinopoisk.ru/film/... (нужна подписка)',
+  mp4:       '<b>MP4/Прямая ссылка:</b> прямой URL на .mp4 / .webm файл'
+};
+
+function setSrc(s) {
+  currentSrc = s;
+  document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('on'));
+  const el = document.getElementById('src-' + s);
+  if (el) el.classList.add('on');
+  const hint = document.getElementById('vhint');
+  if (hint) hint.innerHTML = HINTS[s] || '';
+}
+
+function autoSrc(url) {
+  if (!url) return;
+  if (/youtube\.com|youtu\.be/i.test(url))    setSrc('youtube');
+  else if (/vkvideo\.ru|vk\.com\/video/i.test(url)) setSrc('vk');
+  else if (/kinopoisk\.ru/i.test(url))        setSrc('kinopoisk');
+  else if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) setSrc('mp4');
+}
+
+// ══════════ VIDEO LOADING ══════════
+
+function loadUrl() {
+  const url = document.getElementById('vurl').value.trim();
+  if (!url) { toast('Введите ссылку'); return; }
+
+  if (currentSrc === 'youtube') {
+    const id = ytId(url);
+    if (!id) { toast('Не удалось распознать YouTube-ссылку'); return; }
+    const embed = 'https://www.youtube.com/embed/' + id + '?autoplay=1&rel=0&modestbranding=1';
+    loadIframe(embed, 'YouTube', url, 'youtube');
+    sendSync({ type: 'load-embed', url: embed, label: 'YouTube', orig: url, src_type: 'youtube' });
+  } else if (currentSrc === 'vk') {
+    const embed = vkEmbed(url);
+    if (!embed) { toast('Не удалось распознать VK-ссылку'); return; }
+    loadIframe(embed, 'VK Видео', url, 'vk');
+    sendSync({ type: 'load-embed', url: embed, label: 'VK Видео', orig: url, src_type: 'vk' });
+  } else if (currentSrc === 'kinopoisk') {
+    const embed = kpEmbed(url);
+    if (!embed) { toast('Не удалось распознать ссылку КП'); return; }
+    loadIframe(embed, 'Кинопоиск', url, 'kinopoisk');
+    sendSync({ type: 'load-embed', url: embed, label: 'Кинопоиск', orig: url, src_type: 'kinopoisk' });
+  } else {
+    const name = url.split('/').pop().split('?')[0] || 'Видео';
+    loadVideoSrc(url, name, true);
+    sendSync({ type: 'load-mp4', src: url, name });
+  }
+}
+
+function ytId(url) {
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function vkEmbed(url) {
+  const m = url.match(/video(-?\d+)_(\d+)/);
+  if (m) return 'https://vkvideo.ru/video_ext.php?oid=' + m[1] + '&id=' + m[2] + '&hd=2&autoplay=1';
+  if (url.includes('video_ext')) return url;
+  return null;
+}
+
+function kpEmbed(url) {
+  if (url.includes('hd.kinopoisk.ru') || url.includes('widget.kinopoisk')) return url;
+  const m = url.match(/kinopoisk\.ru\/(?:film|series|show)\/(\d+)/);
+  if (m) return 'https://hd.kinopoisk.ru/films/' + m[1];
+  if (url.includes('kinopoisk.ru')) return url;
+  return null;
+}
+
+function loadIframe(url, label, orig, srcType) {
+  const ifr = document.getElementById('iframe-player');
+  vid.style.display = 'none';
+  vid.src = '';
+  ifr.src = url;
+  ifr.style.display = 'block';
+  document.getElementById('vph').style.display = 'none';
+  document.getElementById('vcontrols').style.display = 'none';
+
+  const notes = {
+    youtube:   '▶ YouTube — управляйте плеером напрямую',
+    vk:        '▶ VK Видео — нажмите Play в плеере',
+    kinopoisk: '🎬 Кинопоиск — нужна подписка, нажмите Play'
+  };
+  const noteEl = document.getElementById('iframe-note');
+  noteEl.textContent = notes[srcType] || '';
+  noteEl.style.display = notes[srcType] ? 'block' : 'none';
+
+  const n = label + ': ' + (orig.length > 38 ? orig.slice(0, 38) + '...' : orig);
+  playlist.push({ n, url, orig, srcType, isEmbed: true });
+  renderPL();
+  sysmsg('🎬 ' + label + ' загружен!');
+  toast(label + ' открыт!');
+}
+
+function loadVideoSrc(src, name, save) {
+  const ifr = document.getElementById('iframe-player');
+  ifr.src = '';
+  ifr.style.display = 'none';
+  vid.style.display = 'block';
+  vid.src = src;
+  vid.load();
+  document.getElementById('vph').style.display = 'none';
+  document.getElementById('iframe-note').style.display = 'none';
+  document.getElementById('vcontrols').style.display = 'flex';
+  vid.onloadedmetadata = () => {
+    document.getElementById('tt').textContent = fmt(vid.duration);
+  };
+  if (save) { playlist.push({ n: name, src, srcType: 'mp4', isEmbed: false }); renderPL(); }
+  sysmsg('🎬 Загружено: ' + name);
+  toast('Загружено: ' + name);
+}
+
+function loadFile(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  loadVideoSrc(URL.createObjectURL(f), f.name, true);
+  toast('Файл "' + f.name + '" загружен (только локально)');
+}
+
+function demo(k) {
+  const map = {
+    bbb: ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'Big Buck Bunny'],
+    ed:  ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', 'Elephants Dream'],
+    yt:  ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube демо', 'youtube']
+  };
+  const d = map[k];
+  if (!d) return;
+  if (d[2] === 'youtube') {
+    setSrc('youtube');
+    document.getElementById('vurl').value = d[0];
+    loadUrl();
+  } else {
+    loadVideoSrc(d[0], d[1], true);
+    sendSync({ type: 'load-mp4', src: d[0], name: d[1] });
+  }
+}
+
+function renderPL() {
+  const el = document.getElementById('playlist');
+  el.innerHTML = '';
+  const ico = { youtube: '▶', vk: '🎬', kinopoisk: '🎞', mp4: '📁' };
+  playlist.forEach((item, i) => {
+    const d = document.createElement('div');
+    d.className = 'pl-item';
+    d.innerHTML = '<span class="pl-ico">' + (ico[item.srcType] || '🎬') + '</span>'
+      + '<span class="pl-name">' + item.n + '</span>'
+      + '<span class="pl-del" onclick="delPL(' + i + ',event)">✕</span>';
+    d.onclick = () => item.isEmbed
+      ? loadIframe(item.url, item.n.split(':')[0], item.orig || '', item.srcType)
+      : loadVideoSrc(item.src, item.n, false);
+    el.appendChild(d);
+  });
+}
+
+function delPL(i, e) { e.stopPropagation(); playlist.splice(i, 1); renderPL(); }
+
+// ══════════ PLAYBACK ══════════
+
+function togglePlay() {
+  if (vid.paused) { vid.play(); sendSync({ type: 'play', t: vid.currentTime }); }
+  else            { vid.pause(); sendSync({ type: 'pause', t: vid.currentTime }); }
+}
+
+vid.onplay  = () => { document.getElementById('btn-play').textContent = '⏸'; };
+vid.onpause = () => { document.getElementById('btn-play').textContent = '▶'; };
+
+vid.ontimeupdate = () => {
+  const t = vid.currentTime, d = vid.duration || 0;
+  document.getElementById('tc').textContent = fmt(t);
+  document.getElementById('prog-fill').style.width = d ? (t / d * 100) + '%' : '0%';
+};
+
+vid.onseeked = () => { if (!syncLock) sendSync({ type: 'seek', t: vid.currentTime }); };
+
+function seekClick(e) {
+  const r = document.getElementById('prog-bar').getBoundingClientRect();
+  const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (vid.duration || 0);
+  vid.currentTime = t;
+  sendSync({ type: 'seek', t });
+}
+
+function setVol(v)    { vid.volume = parseFloat(v); }
+function toggleMute() { isMuted = !isMuted; vid.muted = isMuted; document.getElementById('vol-icon').textContent = isMuted ? '🔇' : '🔊'; }
+function toggleFS()   { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('vwrap').requestFullscreen(); }
+function fmt(s)       { if (!s || isNaN(s)) return '0:00'; return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+
+function showSyncInd() {
+  const el = document.getElementById('sync-ind');
+  el.classList.add('show'); clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+// ══════════ CAM / MIC / SCREEN ══════════
+
+async function toggleCam() {
+  if (!localStream) { toast('Нет камеры'); return; }
+  const t = localStream.getVideoTracks()[0]; if (!t) return;
+  isCam = !isCam; t.enabled = isCam;
+  document.getElementById('btn-cam').classList.toggle('on', isCam);
+  toast(isCam ? 'Камера включена' : 'Камера выключена');
+}
+
+async function toggleMic() {
+  if (!localStream) { toast('Нет микрофона'); return; }
+  const t = localStream.getAudioTracks()[0]; if (!t) return;
+  isMic = !isMic; t.enabled = isMic;
+  document.getElementById('btn-mic').classList.toggle('on', isMic);
+  toast(isMic ? 'Микрофон включён' : 'Микрофон выключен');
+}
+
+async function toggleScreen() {
+  if (isScreen) {
+    if (localStream) myV.srcObject = localStream;
+    isScreen = false; document.getElementById('btn-screen').classList.remove('on');
+    toast('Демонстрация остановлена'); return;
+  }
+  try {
+    const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    myV.srcObject = s;
+    s.getVideoTracks()[0].onended = () => {
+      isScreen = false; document.getElementById('btn-screen').classList.remove('on');
+      if (localStream) myV.srcObject = localStream;
+    };
+    isScreen = true; document.getElementById('btn-screen').classList.add('on');
+    toast('Демонстрация экрана запущена');
+  } catch(e) { toast('Не удалось запустить демонстрацию'); }
+}
+
+// ══════════ CHAT ══════════
+
+function chatKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }
+
+function sendChat() {
+  const el = document.getElementById('chat-in');
+  const t = el.value.trim(); if (!t) return;
+  el.value = '';
+  addMsg(t, 'me');
+  sendSync({ type: 'chat', text: t });
+}
+
+function addMsg(text, who) {
+  const c = document.getElementById('msgs');
+  const w = document.createElement('div'); w.className = 'msg ' + who;
+  const hm = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  w.innerHTML = '<div class="bubble">' + esc(text) + '</div><div class="msg-time">' + hm + '</div>';
+  c.appendChild(w); c.scrollTop = c.scrollHeight;
+}
+
+function sysmsg(text) {
+  const c = document.getElementById('msgs');
+  const w = document.createElement('div'); w.className = 'msg sys';
+  w.innerHTML = '<div class="bubble">' + text + '</div>';
+  c.appendChild(w); c.scrollTop = c.scrollHeight;
+}
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ══════════ REACTIONS ══════════
+
+function react(e)      { floatReact(e); sendSync({ type: 'react', e }); }
+function floatReact(e) {
+  const el = document.createElement('div'); el.className = 'freact';
+  el.textContent = e; el.style.left = (15 + Math.random() * 65) + '%'; el.style.bottom = '72px';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 2100);
+}
+
+// ══════════ DRAG & RESIZE PEER VIDEO ══════════
+
+(function() {
+  const wrap = document.getElementById('peer-wrap');
+  const rh   = document.getElementById('peer-resize');
+  let drag = false, resize = false, sx, sy, sl, st, sw, sh;
+
+  wrap.addEventListener('mousedown', e => {
+    if (e.target === rh || e.target.closest('.peer-resize')) return;
+    drag = true; sx = e.clientX; sy = e.clientY; sl = wrap.offsetLeft; st = wrap.offsetTop;
+    e.preventDefault();
+  });
+  rh.addEventListener('mousedown', e => {
+    resize = true; sx = e.clientX; sy = e.clientY; sw = wrap.offsetWidth; sh = wrap.offsetHeight;
+    e.preventDefault(); e.stopPropagation();
+  });
+  document.addEventListener('mousemove', e => {
+    if (drag) {
+      const vw = document.getElementById('vwrap');
+      wrap.style.left   = Math.max(0, Math.min(vw.offsetWidth  - wrap.offsetWidth,  sl + e.clientX - sx)) + 'px';
+      wrap.style.top    = Math.max(0, Math.min(vw.offsetHeight - wrap.offsetHeight, st + e.clientY - sy)) + 'px';
+      wrap.style.right  = 'auto'; wrap.style.bottom = 'auto';
+    }
+    if (resize) {
+      wrap.style.width  = Math.max(120, Math.min(480, sw + e.clientX - sx)) + 'px';
+      wrap.style.height = Math.max(80,  Math.min(360, sh + e.clientY - sy)) + 'px';
+    }
+  });
+  document.addEventListener('mouseup', () => { drag = false; resize = false; });
+})();
+
+// ══════════ UI HELPERS ══════════
+
+function setStatus(s, text) {
+  const dot = document.getElementById('dot');
+  const txt = document.getElementById('status-txt');
+  dot.className = 'dot' + (s === 'on' ? ' on' : s === 'wait' || s === 'connecting' ? ' wait' : '');
+  txt.textContent = text;
+}
+
+function tab(name) {
+  const names = ['chat', 'video', 'invite'];
+  document.querySelectorAll('.stab').forEach((t, i)  => t.classList.toggle('on', names[i] === name));
+  document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('on', names[i] === name));
+}
+
+function copyLink() {
+  const link = IS_SERVER
+    ? (location.origin + '/?room=' + roomId)
+    : ('Код комнаты: ' + roomId);
+  if (IS_SERVER) {
+    navigator.clipboard.writeText(link).then(() => toast('🔗 Ссылка скопирована!')).catch(() => prompt('Скопируйте:', link));
+  } else {
+    toast('Код комнаты: ' + roomId + ' (нужен сервер для ссылки)');
+  }
+}
+
+function addPart(name) {
+  const list = document.getElementById('parts');
+  const d = document.createElement('div'); d.className = 'part-row';
+  d.innerHTML = '<div class="part-dot" style="background:var(--acc);box-shadow:0 0 5px var(--acc)"></div>' + name;
+  list.appendChild(d);
+}
+
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function modal(title, body, btns) {
+  document.getElementById('modal-h').textContent = title;
+  document.getElementById('modal-p').textContent = body;
+  const el = document.getElementById('modal-btns'); el.innerHTML = '';
+  (btns || []).forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-s'; btn.textContent = b.label; btn.onclick = b.fn;
+    el.appendChild(btn);
+  });
+  document.getElementById('modal-bg').classList.add('show');
+}
+function closeModal() { document.getElementById('modal-bg').classList.remove('show'); }
+
+function leaveRoom() {
+  modal('Выйти из комнаты?', 'Соединение будет разорвано.', [
+    { label: 'Отмена', fn: closeModal },
+    { label: 'Выйти', fn: () => {
+      if (ws) ws.close();
+      if (pc) pc.close();
+      if (localBC) localBC.close();
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      location.href = IS_SERVER ? '/' : location.pathname;
+    }}
+  ]);
+}
+
+// ══════════ AUTO-JOIN FROM URL ══════════
+
+(function() {
+  try {
+    const r = new URLSearchParams(location.search).get('room');
+    if (r) {
+      roomId = r.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      if (roomId.length >= 4) { isHost = false; enterRoom(); }
+    }
+  } catch(e) { /* file:// may not support URLSearchParams in some edge cases */ }
+})();
+</script>
+</body>
+</html>
