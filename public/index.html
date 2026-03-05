@@ -616,20 +616,34 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 
 <script>
 // ═══════════════════════════════════════════════════════
-//  CinemaSync — клиент
-//  Работает локально (file://) и на сервере (http/https)
+//  CinemaSync — WebRTC клиент
 // ═══════════════════════════════════════════════════════
 
-const IS_SERVER = (location.protocol === 'http:' || location.protocol === 'https:');
-const WS_URL    = IS_SERVER
-  ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host
-  : null;
+const IS_SERVER = location.protocol === 'http:' || location.protocol === 'https:';
+const WS_URL    = IS_SERVER ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host : null;
 
-const ICE_CFG = { iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' }
-]};
+// ICE: STUN + бесплатный публичный TURN (metered.ca)
+const ICE_CFG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls:       'turn:openrelay.metered.ca:80',
+      username:   'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls:       'turn:openrelay.metered.ca:443',
+      username:   'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls:       'turn:openrelay.metered.ca:443?transport=tcp',
+      username:   'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ]
+};
 
 // ── State
 let roomId      = null;
@@ -638,13 +652,13 @@ let ws          = null;
 let pc          = null;
 let dc          = null;
 let localStream = null;
-let isCam       = false;
-let isMic       = false;
-let isScreen    = false;
-let syncLock    = false;
-let isMuted     = false;
-let playlist    = [];
-let currentSrc  = 'youtube';
+let isCam = false, isMic = false, isScreen = false;
+let syncLock = false, isMuted = false;
+let playlist = [], currentSrc = 'youtube';
+
+// Очередь ICE-кандидатов до setRemoteDescription
+let iceCandidateQueue = [];
+let remoteDescSet = false;
 
 const vid   = document.getElementById('main-video');
 const myV   = document.getElementById('my-video');
@@ -652,11 +666,8 @@ const peerV = document.getElementById('peer-video');
 
 // ══════════ LANDING ══════════
 
-function createRoom() {
-  roomId = rndId();
-  isHost = true;
-  enterRoom();
-}
+function createRoom() { roomId = rndId(); isHost = true; enterRoom(); }
+function rndId() { return Math.random().toString(36).slice(2,8).toUpperCase(); }
 
 function toggleJoin() {
   const w = document.getElementById('join-wrap');
@@ -668,15 +679,9 @@ function doJoin() {
   let v = document.getElementById('join-input').value.trim();
   const m = v.match(/[?&]room=([A-Z0-9]{4,10})/i) || v.match(/([A-Z0-9]{4,10})/i);
   if (m) v = m[1];
-  v = v.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-  if (v.length < 4) { toast('Введите корректный код комнаты'); return; }
-  roomId = v;
-  isHost = false;
-  enterRoom();
-}
-
-function rndId() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+  v = v.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+  if (v.length < 4) { toast('Введите корректный код'); return; }
+  roomId = v; isHost = false; enterRoom();
 }
 
 // ══════════ ENTER ROOM ══════════
@@ -685,135 +690,160 @@ function enterRoom() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('room').style.display = 'flex';
   document.getElementById('room-id').textContent = roomId;
-
-  const link = IS_SERVER
-    ? (location.origin + '/?room=' + roomId)
-    : ('Откройте этот файл в браузере с ?room=' + roomId);
   document.getElementById('ilink').textContent = IS_SERVER
-    ? (location.origin + '/?room=' + roomId)
-    : ('Код комнаты: ' + roomId);
+    ? location.origin + '/?room=' + roomId
+    : 'Код: ' + roomId + ' (нужен сервер)';
+  if (IS_SERVER) { try { history.replaceState({}, '', '/?room=' + roomId); } catch(e){} }
 
-  // Обновляем URL только если не file://
   if (IS_SERVER) {
-    try { history.replaceState({}, '', '/?room=' + roomId); } catch(e) {}
-  }
-
-  if (IS_SERVER && WS_URL) {
     setupWS();
   } else {
-    // Локальный режим — без сервера, через BroadcastChannel (для теста в одном браузере)
     setStatus('wait', 'Локальный режим');
     setupLocalMode();
-    setupMedia();
-    toast('Локальный режим: откройте в браузере с сервером для работы между устройствами');
+    setupMedia().then(() => {});
+    toast('Локальный режим — для разных устройств нужен сервер');
   }
 }
 
-// ══════════ LOCAL MODE (без сервера, тест в одном браузере) ══════════
+// ══════════ MEDIA (всегда ждём завершения) ══════════
+
+async function setupMedia() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    myV.srcObject = localStream;
+    isCam = true; isMic = true;
+    document.getElementById('btn-cam').classList.add('on');
+    document.getElementById('btn-mic').classList.add('on');
+    log('Media: cam+mic OK');
+  } catch(e) {
+    log('Media cam failed: ' + e.message + ', trying audio only');
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      myV.srcObject = localStream;
+      isMic = true;
+      document.getElementById('btn-mic').classList.add('on');
+      toast('Камера недоступна — только аудио');
+      log('Media: audio only OK');
+    } catch(e2) {
+      log('Media: no access - ' + e2.message);
+      toast('Нет доступа к камере/микрофону');
+      localStream = null;
+    }
+  }
+}
+
+// ══════════ LOCAL MODE ══════════
 
 let localBC = null;
 
 function setupLocalMode() {
   localBC = new BroadcastChannel('cs-' + roomId);
-
   localBC.onmessage = async (e) => {
     const msg = e.data;
-    if (msg.type === 'offer' && !isHost) {
+    if (msg.type === 'guest-here' && isHost) {
+      sysmsg('👋 Партнёр входит...');
+      await startPeerConnection(true);
+    } else if (msg.type === 'offer' && !isHost) {
       await startPeerConnection(false);
       await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      remoteDescSet = true;
+      await flushIceQueue();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       localBC.postMessage({ type: 'answer', sdp: answer });
     } else if (msg.type === 'answer' && isHost) {
       await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      remoteDescSet = true;
+      await flushIceQueue();
     } else if (msg.type === 'ice') {
-      if (pc && msg.candidate) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch(e) {}
-      }
-    } else if (msg.type === 'guest-here' && isHost) {
-      sysmsg('👋 Партнёр входит...');
-      await startPeerConnection(true);
+      await handleIce(msg.candidate);
     } else if (msg.type === 'sync') {
       handleSync(msg.payload);
     }
   };
-
   if (!isHost) {
-    setTimeout(() => {
-      if (localBC) localBC.postMessage({ type: 'guest-here' });
-    }, 600);
+    setTimeout(() => { if (localBC) localBC.postMessage({ type: 'guest-here' }); }, 800);
   } else {
     setStatus('wait', 'Ожидание партнёра...');
-    sysmsg('🔗 Комната создана! Откройте эту страницу в другой вкладке с кодом: ' + roomId);
+    sysmsg('🔗 Комната создана! Откройте в другой вкладке с кодом: ' + roomId);
   }
 }
 
-function localSend(data) {
-  if (localBC) localBC.postMessage(data);
-}
+function localSend(data) { if (localBC) localBC.postMessage(data); }
 
-// ══════════ WEBSOCKET (серверный режим) ══════════
+// ══════════ WEBSOCKET ══════════
 
 function setupWS() {
   setStatus('wait', 'Подключение к серверу...');
-  try {
-    ws = new WebSocket(WS_URL);
-  } catch(e) {
-    setStatus('off', 'Ошибка подключения к серверу');
-    toast('Не удалось подключиться к серверу');
-    return;
+  try { ws = new WebSocket(WS_URL); } catch(e) {
+    setStatus('off', 'Ошибка соединения с сервером'); return;
   }
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
+    log('WS open, role=' + (isHost ? 'host' : 'guest'));
+    // Сначала запрашиваем медиа, потом регистрируемся
+    await setupMedia();
     ws.send(JSON.stringify({ type: isHost ? 'create' : 'join', roomId }));
-    setupMedia();
   };
 
-  ws.onerror = () => { setStatus('off', 'Ошибка сервера'); };
-  ws.onclose = () => { setStatus('off', 'Нет связи с сервером'); };
+  ws.onerror = (e) => { setStatus('off', 'Ошибка сервера'); log('WS error: ' + e); };
+  ws.onclose = ()  => { setStatus('off', 'Нет связи с сервером'); log('WS closed'); };
 
   ws.onmessage = async (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch(err) { return; }
+    log('WS recv: ' + msg.type);
 
     switch (msg.type) {
       case 'created':
         setStatus('wait', 'Ожидание партнёра...');
         sysmsg('🔗 Комната создана! Отправьте ссылку партнёру.');
         break;
+
       case 'joined':
         setStatus('connecting', 'Установка соединения...');
+        // Гость просто ждёт offer от хоста — ничего не делаем
         break;
+
       case 'error':
-        toast('❌ ' + msg.msg);
-        setStatus('off', msg.msg);
-        break;
+        toast('❌ ' + msg.msg); setStatus('off', msg.msg); break;
+
       case 'guest-joined':
+        // Хост получил сигнал — гость в комнате, создаём offer
         sysmsg('👋 Партнёр входит...');
         await startPeerConnection(true);
         break;
+
       case 'offer':
+        // Гость получает offer
         await startPeerConnection(false);
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        remoteDescSet = true;
+        await flushIceQueue();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         wsSend({ type: 'answer', sdp: answer });
         break;
+
       case 'answer':
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        remoteDescSet = true;
+        await flushIceQueue();
         break;
+
       case 'ice':
-        if (pc && msg.candidate) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch(e) {}
-        }
+        await handleIce(msg.candidate);
         break;
+
       case 'sync':
         handleSync(msg.payload);
         break;
+
       case 'peer-left':
         setStatus('off', 'Партнёр отключился');
         sysmsg('🔴 Партнёр отключился');
         document.getElementById('peer-nocam').style.display = 'flex';
+        peerV.srcObject = null;
         break;
     }
   };
@@ -823,82 +853,113 @@ function wsSend(data) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(data));
 }
 
-// ══════════ MEDIA ══════════
+// ══════════ ICE QUEUE (кандидаты могут прийти до setRemoteDescription) ══════════
 
-async function setupMedia() {
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    myV.srcObject = localStream;
-    isCam = true; isMic = true;
-    document.getElementById('btn-cam').classList.add('on');
-    document.getElementById('btn-mic').classList.add('on');
-  } catch(e) {
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      isMic = true;
-      document.getElementById('btn-mic').classList.add('on');
-      toast('Камера недоступна — только аудио');
-    } catch(e2) {
-      toast('Нет доступа к камере/микрофону — только чат');
-    }
+async function handleIce(candidate) {
+  if (!candidate) return;
+  if (remoteDescSet && pc) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+    catch(e) { log('ICE add error: ' + e.message); }
+  } else {
+    iceCandidateQueue.push(candidate);
+    log('ICE queued, total: ' + iceCandidateQueue.length);
   }
 }
 
-// ══════════ WEBRTC ══════════
+async function flushIceQueue() {
+  log('Flushing ICE queue: ' + iceCandidateQueue.length + ' candidates');
+  while (iceCandidateQueue.length) {
+    const c = iceCandidateQueue.shift();
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
+    catch(e) { log('ICE flush error: ' + e.message); }
+  }
+}
+
+// ══════════ WEBRTC PEER CONNECTION ══════════
 
 async function startPeerConnection(makeOffer) {
+  // Сброс состояния
   if (pc) { pc.close(); pc = null; }
+  iceCandidateQueue = [];
+  remoteDescSet = false;
+
+  log('Starting PeerConnection, makeOffer=' + makeOffer);
   pc = new RTCPeerConnection(ICE_CFG);
 
+  // Добавляем все треки локального стрима
   if (localStream) {
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    localStream.getTracks().forEach(t => {
+      pc.addTrack(t, localStream);
+      log('Added local track: ' + t.kind);
+    });
+  } else {
+    log('WARNING: no localStream when creating PeerConnection!');
   }
 
+  // Получаем стрим партнёра
   pc.ontrack = (e) => {
+    log('ontrack: ' + e.track.kind + ', streams: ' + e.streams.length);
     if (e.streams && e.streams[0]) {
       peerV.srcObject = e.streams[0];
+      peerV.play().catch(err => log('peerV.play error: ' + err));
       document.getElementById('peer-nocam').style.display = 'none';
     }
   };
 
+  // ICE кандидаты
   pc.onicecandidate = (e) => {
-    if (!e.candidate) return;
-    const iceMsg = { type: 'ice', candidate: e.candidate };
-    if (IS_SERVER) wsSend(iceMsg);
-    else localSend(iceMsg);
+    if (!e.candidate) { log('ICE gathering done'); return; }
+    log('ICE candidate: ' + e.candidate.type);
+    const msg = { type: 'ice', candidate: e.candidate };
+    if (IS_SERVER) wsSend(msg); else localSend(msg);
+  };
+
+  pc.onicegatheringstatechange = () => log('ICE gathering: ' + pc.iceGatheringState);
+  pc.oniceconnectionstatechange = () => {
+    log('ICE connection: ' + pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') {
+      log('ICE failed — trying restart');
+      pc.restartIce();
+    }
   };
 
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
+    log('Connection state: ' + s);
     if (s === 'connected') {
       setStatus('on', 'Подключено ✓');
       sysmsg('🟢 Партнёр подключился!');
       addPart('Партнёр');
     } else if (s === 'connecting') {
       setStatus('connecting', 'Соединение...');
-    } else if (s === 'disconnected' || s === 'failed') {
-      setStatus('off', 'Разрыв соединения');
+    } else if (s === 'disconnected') {
+      setStatus('off', 'Разрыв — переподключение...');
+    } else if (s === 'failed') {
+      setStatus('off', 'Соединение не удалось');
+      sysmsg('❌ Не удалось установить P2P соединение');
     }
   };
 
   if (makeOffer) {
+    // Хост: создаём DataChannel и offer
     dc = pc.createDataChannel('sync', { ordered: true });
     setupDC(dc);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const offerMsg = { type: 'offer', sdp: offer };
-    if (IS_SERVER) wsSend(offerMsg);
-    else localSend(offerMsg);
+    if (IS_SERVER) wsSend(offerMsg); else localSend(offerMsg);
+    log('Offer sent');
   } else {
-    pc.ondatachannel = (e) => { dc = e.channel; setupDC(dc); };
+    // Гость: ждём DataChannel от хоста
+    pc.ondatachannel = (e) => { dc = e.channel; setupDC(dc); log('DataChannel received'); };
   }
 }
 
 function setupDC(channel) {
-  channel.onopen    = () => console.log('DataChannel open');
-  channel.onmessage = (e) => {
-    try { handleSync(JSON.parse(e.data)); } catch(err) {}
-  };
+  channel.onopen    = () => { log('DataChannel open'); };
+  channel.onclose   = () => { log('DataChannel closed'); };
+  channel.onerror   = (e) => { log('DataChannel error: ' + e); };
+  channel.onmessage = (e) => { try { handleSync(JSON.parse(e.data)); } catch(err) {} };
 }
 
 // ══════════ SYNC ══════════
@@ -916,37 +977,18 @@ function sendSync(payload) {
 function handleSync(msg) {
   switch (msg.type) {
     case 'play':
-      syncLock = true;
-      vid.currentTime = msg.t;
-      vid.play();
-      showSyncInd();
-      setTimeout(() => { syncLock = false; }, 600);
-      break;
+      syncLock = true; vid.currentTime = msg.t; vid.play(); showSyncInd();
+      setTimeout(() => { syncLock = false; }, 600); break;
     case 'pause':
-      syncLock = true;
-      vid.currentTime = msg.t;
-      vid.pause();
-      showSyncInd();
-      setTimeout(() => { syncLock = false; }, 600);
-      break;
+      syncLock = true; vid.currentTime = msg.t; vid.pause(); showSyncInd();
+      setTimeout(() => { syncLock = false; }, 600); break;
     case 'seek':
-      syncLock = true;
-      vid.currentTime = msg.t;
-      showSyncInd();
-      setTimeout(() => { syncLock = false; }, 300);
-      break;
-    case 'load-mp4':
-      loadVideoSrc(msg.src, msg.name, false);
-      break;
-    case 'load-embed':
-      loadIframe(msg.url, msg.label, msg.orig, msg.src_type);
-      break;
-    case 'chat':
-      addMsg(msg.text, 'them');
-      break;
-    case 'react':
-      floatReact(msg.e);
-      break;
+      syncLock = true; vid.currentTime = msg.t; showSyncInd();
+      setTimeout(() => { syncLock = false; }, 300); break;
+    case 'load-mp4':   loadVideoSrc(msg.src, msg.name, false); break;
+    case 'load-embed': loadIframe(msg.url, msg.label, msg.orig, msg.src_type); break;
+    case 'chat':       addMsg(msg.text, 'them'); break;
+    case 'react':      floatReact(msg.e); break;
   }
 }
 
@@ -956,24 +998,22 @@ const HINTS = {
   youtube:   '<b>YouTube:</b> youtube.com/watch?v=... или youtu.be/...',
   vk:        '<b>VK Видео:</b> vkvideo.ru/video-... или vk.com/video-...',
   kinopoisk: '<b>Кинопоиск:</b> kinopoisk.ru/film/... (нужна подписка)',
-  mp4:       '<b>MP4/Прямая ссылка:</b> прямой URL на .mp4 / .webm файл'
+  mp4:       '<b>MP4/Прямая ссылка:</b> прямой URL на .mp4 / .webm'
 };
 
 function setSrc(s) {
   currentSrc = s;
   document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('on'));
-  const el = document.getElementById('src-' + s);
-  if (el) el.classList.add('on');
-  const hint = document.getElementById('vhint');
-  if (hint) hint.innerHTML = HINTS[s] || '';
+  const el = document.getElementById('src-' + s); if (el) el.classList.add('on');
+  const h = document.getElementById('vhint'); if (h) h.innerHTML = HINTS[s] || '';
 }
 
 function autoSrc(url) {
   if (!url) return;
-  if (/youtube\.com|youtu\.be/i.test(url))    setSrc('youtube');
+  if (/youtube\.com|youtu\.be/i.test(url))        setSrc('youtube');
   else if (/vkvideo\.ru|vk\.com\/video/i.test(url)) setSrc('vk');
-  else if (/kinopoisk\.ru/i.test(url))        setSrc('kinopoisk');
-  else if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) setSrc('mp4');
+  else if (/kinopoisk\.ru/i.test(url))              setSrc('kinopoisk');
+  else if (/\.(mp4|webm|ogg)(\?|$)/i.test(url))  setSrc('mp4');
 }
 
 // ══════════ VIDEO LOADING ══════════
@@ -981,7 +1021,6 @@ function autoSrc(url) {
 function loadUrl() {
   const url = document.getElementById('vurl').value.trim();
   if (!url) { toast('Введите ссылку'); return; }
-
   if (currentSrc === 'youtube') {
     const id = ytId(url);
     if (!id) { toast('Не удалось распознать YouTube-ссылку'); return; }
@@ -1005,330 +1044,258 @@ function loadUrl() {
   }
 }
 
-function ytId(url) {
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+function ytId(u) {
+  const m = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
 }
-
-function vkEmbed(url) {
-  const m = url.match(/video(-?\d+)_(\d+)/);
+function vkEmbed(u) {
+  const m = u.match(/video(-?\d+)_(\d+)/);
   if (m) return 'https://vkvideo.ru/video_ext.php?oid=' + m[1] + '&id=' + m[2] + '&hd=2&autoplay=1';
-  if (url.includes('video_ext')) return url;
+  if (u.includes('video_ext')) return u;
   return null;
 }
-
-function kpEmbed(url) {
-  if (url.includes('hd.kinopoisk.ru') || url.includes('widget.kinopoisk')) return url;
-  const m = url.match(/kinopoisk\.ru\/(?:film|series|show)\/(\d+)/);
+function kpEmbed(u) {
+  if (u.includes('hd.kinopoisk.ru') || u.includes('widget.kinopoisk')) return u;
+  const m = u.match(/kinopoisk\.ru\/(?:film|series|show)\/(\d+)/);
   if (m) return 'https://hd.kinopoisk.ru/films/' + m[1];
-  if (url.includes('kinopoisk.ru')) return url;
+  if (u.includes('kinopoisk.ru')) return u;
   return null;
 }
 
 function loadIframe(url, label, orig, srcType) {
   const ifr = document.getElementById('iframe-player');
-  vid.style.display = 'none';
-  vid.src = '';
-  ifr.src = url;
-  ifr.style.display = 'block';
+  vid.style.display = 'none'; vid.src = '';
+  ifr.src = url; ifr.style.display = 'block';
   document.getElementById('vph').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'none';
-
-  const notes = {
-    youtube:   '▶ YouTube — управляйте плеером напрямую',
-    vk:        '▶ VK Видео — нажмите Play в плеере',
-    kinopoisk: '🎬 Кинопоиск — нужна подписка, нажмите Play'
-  };
-  const noteEl = document.getElementById('iframe-note');
-  noteEl.textContent = notes[srcType] || '';
-  noteEl.style.display = notes[srcType] ? 'block' : 'none';
-
-  const n = label + ': ' + (orig.length > 38 ? orig.slice(0, 38) + '...' : orig);
-  playlist.push({ n, url, orig, srcType, isEmbed: true });
-  renderPL();
-  sysmsg('🎬 ' + label + ' загружен!');
-  toast(label + ' открыт!');
+  const notes = { youtube:'▶ YouTube — управляйте плеером напрямую', vk:'▶ VK Видео — нажмите Play', kinopoisk:'🎬 Кинопоиск — нужна подписка' };
+  const n = document.getElementById('iframe-note');
+  n.textContent = notes[srcType] || ''; n.style.display = notes[srcType] ? 'block' : 'none';
+  const nm = label + ': ' + (orig.length > 38 ? orig.slice(0,38)+'...' : orig);
+  playlist.push({ n: nm, url, orig, srcType, isEmbed: true }); renderPL();
+  sysmsg('🎬 ' + label + ' загружен!'); toast(label + ' открыт!');
 }
 
 function loadVideoSrc(src, name, save) {
   const ifr = document.getElementById('iframe-player');
-  ifr.src = '';
-  ifr.style.display = 'none';
-  vid.style.display = 'block';
-  vid.src = src;
-  vid.load();
+  ifr.src = ''; ifr.style.display = 'none';
+  vid.style.display = 'block'; vid.src = src; vid.load();
   document.getElementById('vph').style.display = 'none';
   document.getElementById('iframe-note').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'flex';
-  vid.onloadedmetadata = () => {
-    document.getElementById('tt').textContent = fmt(vid.duration);
-  };
+  vid.onloadedmetadata = () => { document.getElementById('tt').textContent = fmt(vid.duration); };
   if (save) { playlist.push({ n: name, src, srcType: 'mp4', isEmbed: false }); renderPL(); }
-  sysmsg('🎬 Загружено: ' + name);
-  toast('Загружено: ' + name);
+  sysmsg('🎬 Загружено: ' + name); toast('Загружено: ' + name);
 }
 
 function loadFile(e) {
-  const f = e.target.files[0];
-  if (!f) return;
+  const f = e.target.files[0]; if (!f) return;
   loadVideoSrc(URL.createObjectURL(f), f.name, true);
-  toast('Файл "' + f.name + '" загружен (только локально)');
+  toast('"' + f.name + '" загружен (только локально)');
 }
 
 function demo(k) {
   const map = {
-    bbb: ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'Big Buck Bunny'],
-    ed:  ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', 'Elephants Dream'],
-    yt:  ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube демо', 'youtube']
+    bbb: ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4','Big Buck Bunny'],
+    ed:  ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4','Elephants Dream'],
+    yt:  ['https://www.youtube.com/watch?v=dQw4w9WgXcQ','YouTube демо','youtube']
   };
-  const d = map[k];
-  if (!d) return;
-  if (d[2] === 'youtube') {
-    setSrc('youtube');
-    document.getElementById('vurl').value = d[0];
-    loadUrl();
-  } else {
-    loadVideoSrc(d[0], d[1], true);
-    sendSync({ type: 'load-mp4', src: d[0], name: d[1] });
-  }
+  const d = map[k]; if (!d) return;
+  if (d[2] === 'youtube') { setSrc('youtube'); document.getElementById('vurl').value = d[0]; loadUrl(); }
+  else { loadVideoSrc(d[0], d[1], true); sendSync({ type: 'load-mp4', src: d[0], name: d[1] }); }
 }
 
 function renderPL() {
-  const el = document.getElementById('playlist');
-  el.innerHTML = '';
-  const ico = { youtube: '▶', vk: '🎬', kinopoisk: '🎞', mp4: '📁' };
+  const el = document.getElementById('playlist'); el.innerHTML = '';
+  const ico = { youtube:'▶', vk:'🎬', kinopoisk:'🎞', mp4:'📁' };
   playlist.forEach((item, i) => {
-    const d = document.createElement('div');
-    d.className = 'pl-item';
-    d.innerHTML = '<span class="pl-ico">' + (ico[item.srcType] || '🎬') + '</span>'
-      + '<span class="pl-name">' + item.n + '</span>'
-      + '<span class="pl-del" onclick="delPL(' + i + ',event)">✕</span>';
-    d.onclick = () => item.isEmbed
-      ? loadIframe(item.url, item.n.split(':')[0], item.orig || '', item.srcType)
-      : loadVideoSrc(item.src, item.n, false);
+    const d = document.createElement('div'); d.className = 'pl-item';
+    d.innerHTML = '<span class="pl-ico">'+(ico[item.srcType]||'🎬')+'</span>'
+      +'<span class="pl-name">'+item.n+'</span>'
+      +'<span class="pl-del" onclick="delPL('+i+',event)">✕</span>';
+    d.onclick = () => item.isEmbed ? loadIframe(item.url, item.n.split(':')[0], item.orig||'', item.srcType) : loadVideoSrc(item.src, item.n, false);
     el.appendChild(d);
   });
 }
 
-function delPL(i, e) { e.stopPropagation(); playlist.splice(i, 1); renderPL(); }
+function delPL(i, e) { e.stopPropagation(); playlist.splice(i,1); renderPL(); }
 
 // ══════════ PLAYBACK ══════════
 
 function togglePlay() {
-  if (vid.paused) { vid.play(); sendSync({ type: 'play', t: vid.currentTime }); }
-  else            { vid.pause(); sendSync({ type: 'pause', t: vid.currentTime }); }
+  if (vid.paused) { vid.play(); sendSync({ type:'play', t:vid.currentTime }); }
+  else            { vid.pause(); sendSync({ type:'pause', t:vid.currentTime }); }
 }
-
 vid.onplay  = () => { document.getElementById('btn-play').textContent = '⏸'; };
 vid.onpause = () => { document.getElementById('btn-play').textContent = '▶'; };
-
 vid.ontimeupdate = () => {
-  const t = vid.currentTime, d = vid.duration || 0;
+  const t = vid.currentTime, d = vid.duration||0;
   document.getElementById('tc').textContent = fmt(t);
-  document.getElementById('prog-fill').style.width = d ? (t / d * 100) + '%' : '0%';
+  document.getElementById('prog-fill').style.width = d ? (t/d*100)+'%' : '0%';
 };
-
-vid.onseeked = () => { if (!syncLock) sendSync({ type: 'seek', t: vid.currentTime }); };
-
+vid.onseeked = () => { if (!syncLock) sendSync({ type:'seek', t:vid.currentTime }); };
 function seekClick(e) {
   const r = document.getElementById('prog-bar').getBoundingClientRect();
-  const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (vid.duration || 0);
-  vid.currentTime = t;
-  sendSync({ type: 'seek', t });
+  const t = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)) * (vid.duration||0);
+  vid.currentTime = t; sendSync({ type:'seek', t });
 }
-
 function setVol(v)    { vid.volume = parseFloat(v); }
-function toggleMute() { isMuted = !isMuted; vid.muted = isMuted; document.getElementById('vol-icon').textContent = isMuted ? '🔇' : '🔊'; }
+function toggleMute() { isMuted=!isMuted; vid.muted=isMuted; document.getElementById('vol-icon').textContent = isMuted?'🔇':'🔊'; }
 function toggleFS()   { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('vwrap').requestFullscreen(); }
-function fmt(s)       { if (!s || isNaN(s)) return '0:00'; return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
-
-function showSyncInd() {
-  const el = document.getElementById('sync-ind');
-  el.classList.add('show'); clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 1600);
-}
+function fmt(s)       { if(!s||isNaN(s)) return '0:00'; return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); }
+function showSyncInd(){ const el=document.getElementById('sync-ind'); el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),1600); }
 
 // ══════════ CAM / MIC / SCREEN ══════════
 
 async function toggleCam() {
   if (!localStream) { toast('Нет камеры'); return; }
   const t = localStream.getVideoTracks()[0]; if (!t) return;
-  isCam = !isCam; t.enabled = isCam;
+  isCam=!isCam; t.enabled=isCam;
   document.getElementById('btn-cam').classList.toggle('on', isCam);
-  toast(isCam ? 'Камера включена' : 'Камера выключена');
+  toast(isCam?'Камера включена':'Камера выключена');
 }
-
 async function toggleMic() {
   if (!localStream) { toast('Нет микрофона'); return; }
   const t = localStream.getAudioTracks()[0]; if (!t) return;
-  isMic = !isMic; t.enabled = isMic;
+  isMic=!isMic; t.enabled=isMic;
   document.getElementById('btn-mic').classList.toggle('on', isMic);
-  toast(isMic ? 'Микрофон включён' : 'Микрофон выключен');
+  toast(isMic?'Микрофон включён':'Микрофон выключен');
 }
-
 async function toggleScreen() {
   if (isScreen) {
     if (localStream) myV.srcObject = localStream;
-    isScreen = false; document.getElementById('btn-screen').classList.remove('on');
+    isScreen=false; document.getElementById('btn-screen').classList.remove('on');
     toast('Демонстрация остановлена'); return;
   }
   try {
-    const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const s = await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
     myV.srcObject = s;
     s.getVideoTracks()[0].onended = () => {
-      isScreen = false; document.getElementById('btn-screen').classList.remove('on');
+      isScreen=false; document.getElementById('btn-screen').classList.remove('on');
       if (localStream) myV.srcObject = localStream;
     };
-    isScreen = true; document.getElementById('btn-screen').classList.add('on');
+    isScreen=true; document.getElementById('btn-screen').classList.add('on');
     toast('Демонстрация экрана запущена');
   } catch(e) { toast('Не удалось запустить демонстрацию'); }
 }
 
 // ══════════ CHAT ══════════
 
-function chatKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }
-
+function chatKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();} }
 function sendChat() {
   const el = document.getElementById('chat-in');
-  const t = el.value.trim(); if (!t) return;
-  el.value = '';
-  addMsg(t, 'me');
-  sendSync({ type: 'chat', text: t });
+  const t = el.value.trim(); if(!t) return;
+  el.value = ''; addMsg(t,'me'); sendSync({ type:'chat', text:t });
 }
-
 function addMsg(text, who) {
   const c = document.getElementById('msgs');
-  const w = document.createElement('div'); w.className = 'msg ' + who;
-  const hm = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-  w.innerHTML = '<div class="bubble">' + esc(text) + '</div><div class="msg-time">' + hm + '</div>';
-  c.appendChild(w); c.scrollTop = c.scrollHeight;
+  const w = document.createElement('div'); w.className='msg '+who;
+  const hm = new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
+  w.innerHTML = '<div class="bubble">'+esc(text)+'</div><div class="msg-time">'+hm+'</div>';
+  c.appendChild(w); c.scrollTop=c.scrollHeight;
 }
-
 function sysmsg(text) {
   const c = document.getElementById('msgs');
-  const w = document.createElement('div'); w.className = 'msg sys';
-  w.innerHTML = '<div class="bubble">' + text + '</div>';
-  c.appendChild(w); c.scrollTop = c.scrollHeight;
+  const w = document.createElement('div'); w.className='msg sys';
+  w.innerHTML='<div class="bubble">'+text+'</div>';
+  c.appendChild(w); c.scrollTop=c.scrollHeight;
 }
-
-function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ══════════ REACTIONS ══════════
 
-function react(e)      { floatReact(e); sendSync({ type: 'react', e }); }
-function floatReact(e) {
-  const el = document.createElement('div'); el.className = 'freact';
-  el.textContent = e; el.style.left = (15 + Math.random() * 65) + '%'; el.style.bottom = '72px';
-  document.body.appendChild(el); setTimeout(() => el.remove(), 2100);
+function react(e){ floatReact(e); sendSync({type:'react',e}); }
+function floatReact(e){
+  const el=document.createElement('div'); el.className='freact';
+  el.textContent=e; el.style.left=(15+Math.random()*65)+'%'; el.style.bottom='72px';
+  document.body.appendChild(el); setTimeout(()=>el.remove(),2100);
 }
 
 // ══════════ DRAG & RESIZE PEER VIDEO ══════════
 
-(function() {
-  const wrap = document.getElementById('peer-wrap');
-  const rh   = document.getElementById('peer-resize');
-  let drag = false, resize = false, sx, sy, sl, st, sw, sh;
-
-  wrap.addEventListener('mousedown', e => {
-    if (e.target === rh || e.target.closest('.peer-resize')) return;
-    drag = true; sx = e.clientX; sy = e.clientY; sl = wrap.offsetLeft; st = wrap.offsetTop;
-    e.preventDefault();
+(function(){
+  const wrap=document.getElementById('peer-wrap'), rh=document.getElementById('peer-resize');
+  let drag=false,resize=false,sx,sy,sl,st,sw,sh;
+  wrap.addEventListener('mousedown',e=>{
+    if(e.target===rh||e.target.closest('.peer-resize'))return;
+    drag=true;sx=e.clientX;sy=e.clientY;sl=wrap.offsetLeft;st=wrap.offsetTop;e.preventDefault();
   });
-  rh.addEventListener('mousedown', e => {
-    resize = true; sx = e.clientX; sy = e.clientY; sw = wrap.offsetWidth; sh = wrap.offsetHeight;
-    e.preventDefault(); e.stopPropagation();
+  rh.addEventListener('mousedown',e=>{
+    resize=true;sx=e.clientX;sy=e.clientY;sw=wrap.offsetWidth;sh=wrap.offsetHeight;
+    e.preventDefault();e.stopPropagation();
   });
-  document.addEventListener('mousemove', e => {
-    if (drag) {
-      const vw = document.getElementById('vwrap');
-      wrap.style.left   = Math.max(0, Math.min(vw.offsetWidth  - wrap.offsetWidth,  sl + e.clientX - sx)) + 'px';
-      wrap.style.top    = Math.max(0, Math.min(vw.offsetHeight - wrap.offsetHeight, st + e.clientY - sy)) + 'px';
-      wrap.style.right  = 'auto'; wrap.style.bottom = 'auto';
+  document.addEventListener('mousemove',e=>{
+    if(drag){
+      const vw=document.getElementById('vwrap');
+      wrap.style.left=Math.max(0,Math.min(vw.offsetWidth-wrap.offsetWidth,sl+e.clientX-sx))+'px';
+      wrap.style.top=Math.max(0,Math.min(vw.offsetHeight-wrap.offsetHeight,st+e.clientY-sy))+'px';
+      wrap.style.right='auto';wrap.style.bottom='auto';
     }
-    if (resize) {
-      wrap.style.width  = Math.max(120, Math.min(480, sw + e.clientX - sx)) + 'px';
-      wrap.style.height = Math.max(80,  Math.min(360, sh + e.clientY - sy)) + 'px';
+    if(resize){
+      wrap.style.width=Math.max(120,Math.min(480,sw+e.clientX-sx))+'px';
+      wrap.style.height=Math.max(80,Math.min(360,sh+e.clientY-sy))+'px';
     }
   });
-  document.addEventListener('mouseup', () => { drag = false; resize = false; });
+  document.addEventListener('mouseup',()=>{drag=false;resize=false;});
 })();
 
-// ══════════ UI HELPERS ══════════
+// ══════════ UI ══════════
 
 function setStatus(s, text) {
-  const dot = document.getElementById('dot');
-  const txt = document.getElementById('status-txt');
-  dot.className = 'dot' + (s === 'on' ? ' on' : s === 'wait' || s === 'connecting' ? ' wait' : '');
-  txt.textContent = text;
+  const dot=document.getElementById('dot'), txt=document.getElementById('status-txt');
+  dot.className='dot'+(s==='on'?' on':s==='wait'||s==='connecting'?' wait':'');
+  txt.textContent=text;
 }
-
 function tab(name) {
-  const names = ['chat', 'video', 'invite'];
-  document.querySelectorAll('.stab').forEach((t, i)  => t.classList.toggle('on', names[i] === name));
-  document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('on', names[i] === name));
+  const names=['chat','video','invite'];
+  document.querySelectorAll('.stab').forEach((t,i)=>t.classList.toggle('on',names[i]===name));
+  document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('on',names[i]===name));
 }
-
 function copyLink() {
-  const link = IS_SERVER
-    ? (location.origin + '/?room=' + roomId)
-    : ('Код комнаты: ' + roomId);
-  if (IS_SERVER) {
-    navigator.clipboard.writeText(link).then(() => toast('🔗 Ссылка скопирована!')).catch(() => prompt('Скопируйте:', link));
-  } else {
-    toast('Код комнаты: ' + roomId + ' (нужен сервер для ссылки)');
-  }
+  const link = IS_SERVER ? location.origin+'/?room='+roomId : 'Код: '+roomId;
+  if (IS_SERVER) navigator.clipboard.writeText(link).then(()=>toast('🔗 Ссылка скопирована!')).catch(()=>prompt('Скопируйте:',link));
+  else toast('Код комнаты: '+roomId);
 }
-
-function addPart(name) {
-  const list = document.getElementById('parts');
-  const d = document.createElement('div'); d.className = 'part-row';
-  d.innerHTML = '<div class="part-dot" style="background:var(--acc);box-shadow:0 0 5px var(--acc)"></div>' + name;
-  list.appendChild(d);
+function addPart(name){
+  const l=document.getElementById('parts'), d=document.createElement('div');
+  d.className='part-row';
+  d.innerHTML='<div class="part-dot" style="background:var(--acc);box-shadow:0 0 5px var(--acc)"></div>'+name;
+  l.appendChild(d);
 }
-
 let _tt;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  clearTimeout(_tt); _tt = setTimeout(() => el.classList.remove('show'), 3000);
-}
-
-function modal(title, body, btns) {
-  document.getElementById('modal-h').textContent = title;
-  document.getElementById('modal-p').textContent = body;
-  const el = document.getElementById('modal-btns'); el.innerHTML = '';
-  (btns || []).forEach(b => {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-s'; btn.textContent = b.label; btn.onclick = b.fn;
-    el.appendChild(btn);
-  });
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),3000); }
+function modal(title,body,btns){
+  document.getElementById('modal-h').textContent=title;
+  document.getElementById('modal-p').textContent=body;
+  const el=document.getElementById('modal-btns'); el.innerHTML='';
+  (btns||[]).forEach(b=>{ const btn=document.createElement('button'); btn.className='btn btn-s'; btn.textContent=b.label; btn.onclick=b.fn; el.appendChild(btn); });
   document.getElementById('modal-bg').classList.add('show');
 }
-function closeModal() { document.getElementById('modal-bg').classList.remove('show'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
 
-function leaveRoom() {
-  modal('Выйти из комнаты?', 'Соединение будет разорвано.', [
-    { label: 'Отмена', fn: closeModal },
-    { label: 'Выйти', fn: () => {
-      if (ws) ws.close();
-      if (pc) pc.close();
-      if (localBC) localBC.close();
-      if (localStream) localStream.getTracks().forEach(t => t.stop());
+function leaveRoom(){
+  modal('Выйти?','Соединение будет разорвано.',[
+    {label:'Отмена',fn:closeModal},
+    {label:'Выйти',fn:()=>{
+      if(ws) ws.close(); if(pc) pc.close();
+      if(localBC) localBC.close();
+      if(localStream) localStream.getTracks().forEach(t=>t.stop());
       location.href = IS_SERVER ? '/' : location.pathname;
     }}
   ]);
 }
 
+// ══════════ DEBUG LOG ══════════
+
+function log(msg){ console.log('[CS]', msg); }
+
 // ══════════ AUTO-JOIN FROM URL ══════════
 
-(function() {
+(function(){
   try {
     const r = new URLSearchParams(location.search).get('room');
-    if (r) {
-      roomId = r.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      if (roomId.length >= 4) { isHost = false; enterRoom(); }
-    }
-  } catch(e) { /* file:// may not support URLSearchParams in some edge cases */ }
+    if(r){ roomId=r.replace(/[^A-Z0-9]/gi,'').toUpperCase(); if(roomId.length>=4){isHost=false;enterRoom();} }
+  } catch(e){}
 })();
 </script>
 </body>
