@@ -523,7 +523,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
         <div id="yt-player"></div>
       </div>
       <!-- VK / Kinopoisk iframe -->
-      <iframe id="iframe-player" allowfullscreen allow="autoplay;fullscreen;encrypted-media"></iframe>
+      <iframe id="iframe-player" allow="autoplay; fullscreen; encrypted-media"></iframe>
       <!-- Guest overlay controls (shown only for guest when embed is playing) -->
       <div id="guest-overlay" style="display:none">
         <button id="go-playpause" onclick="guestTogglePlay()">▶</button>
@@ -1266,11 +1266,16 @@ function _createYTPlayer(videoId) {
 
 function _onYTReady(e) {
   sysmsg('▶ YouTube готов!');
-  e.target.playVideo();
+  // e.target может быть undefined в некоторых браузерах — используем ytPlayer напрямую
+  const player = (e && e.target) ? e.target : ytPlayer;
+  if (!player) return;
+  try { player.playVideo(); } catch(err) {}
   // Ждём пока duration станет > 0
-  const t = setInterval(() => {
-    const d = e.target.getDuration();
-    if (d > 0) { ytDuration = d; clearInterval(t); }
+  const timer = setInterval(() => {
+    try {
+      const d = player.getDuration ? player.getDuration() : 0;
+      if (d > 0) { ytDuration = d; clearInterval(timer); }
+    } catch(err) { clearInterval(timer); }
   }, 300);
   startYTProgress();
 }
