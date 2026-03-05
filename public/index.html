@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CinemaSync</title>
-<script src="https://www.youtube.com/iframe_api"></script>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -133,8 +132,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 #main-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
 #iframe-player{position:absolute;inset:0;width:100%;height:100%;border:none;display:none;background:#000}
-#yt-player{width:100%;height:100%}
-#yt-player iframe,#yt-player > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;border:none!important}
+#yt-player,#yt-player iframe{
+  position:absolute;inset:0;width:100%!important;height:100%!important;border:none}
 
 /* ── GUEST OVERLAY — управление у гостя поверх плеера хоста */
 #guest-overlay{
@@ -1179,26 +1178,30 @@ function kpEmbed(u) {
 }
 
 // ── YOUTUBE IFRAME API ─────────────────────────────
-// Модель: оба держат реальный YT плеер.
-// Любой нажимает — команда летит ОБОИМ через sendYTCommand.
-// syncLockYT блокирует эхо-реакцию на собственные действия.
+// YT API загружается динамически после DOMContentLoaded
 
-let ytPlayer = null;
-let ytReady = false;
-let ytPendingId = null;
-let ytState = -1;
-let ytDuration = 0;
+let ytPlayer     = null;
+let ytAPIReady   = false;
+let ytPendingId  = null;
+let ytState      = -1;
+let ytDuration   = 0;
 let ytProgressTimer = null;
-let syncLockYT = false;  // блокирует реакцию на входящий sync пока выполняем
-let lastSyncTime = 0;    // throttle исходящих событий
+let syncLockYT   = false;
+let lastSyncTime = 0;
 
+// Глобальный колбэк — вызывается YouTube API когда готов
 window.onYouTubeIframeAPIReady = function() {
-  ytReady = true;
-  if (ytPendingId) { _createYTPlayer(ytPendingId); ytPendingId = null; }
+  ytAPIReady = true;
+  if (ytPendingId) {
+    const id = ytPendingId; ytPendingId = null;
+    _createYTPlayer(id);
+  }
 };
 
 function loadYouTube(videoId, orig) {
+  // Скрываем всё остальное
   vid.style.display = 'none'; vid.src = '';
+  document.getElementById('iframe-player').src = '';
   document.getElementById('iframe-player').style.display = 'none';
   document.getElementById('vph').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'none';
@@ -1207,131 +1210,130 @@ function loadYouTube(videoId, orig) {
   document.getElementById('guest-overlay').style.display = 'flex';
 
   const nm = 'YouTube: ' + (orig && orig.length > 38 ? orig.slice(0,38)+'...' : (orig||videoId));
-  if (!playlist.find(p => p.videoId === videoId)) {
-    playlist.push({ n:nm, videoId, orig:orig||'', srcType:'youtube', isYT:true }); renderPL();
-  }
-  sysmsg('🎬 YouTube загружен!');
+  if (!playlist.find(p => p.videoId === videoId))
+    playlist.push({ n:nm, videoId, orig:orig||'', srcType:'youtube', isYT:true }), renderPL();
+
+  sysmsg('🎬 YouTube загружается...');
   currentSrc = 'youtube';
 
-  if (!ytReady) { ytPendingId = videoId; return; }
-  // Always recreate player for reliable behavior
-  if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+  // Уничтожаем старый плеер
+  if (ytPlayer) {
     try { ytPlayer.destroy(); } catch(e) {}
     ytPlayer = null;
   }
-  _createYTPlayer(videoId);
+
+  if (ytAPIReady) {
+    _createYTPlayer(videoId);
+  } else {
+    ytPendingId = videoId;
+    // Подгружаем API если ещё не загружен
+    if (!document.getElementById('yt-api-script')) {
+      const s = document.createElement('script');
+      s.id  = 'yt-api-script';
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(s);
+    }
+  }
 }
 
 function _createYTPlayer(videoId) {
-  // YT.Player replaces the target element with an <iframe>
-  // We need to re-create the div each time because YT destroys it
+  // Пересоздаём целевой div (YT API заменяет его на iframe)
   const wrap = document.getElementById('yt-wrap');
-  // Remove old player div and create fresh one
-  const old = document.getElementById('yt-player');
+  const old  = document.getElementById('yt-player');
   if (old) old.remove();
-  const newDiv = document.createElement('div');
-  newDiv.id = 'yt-player';
-  wrap.insertBefore(newDiv, wrap.firstChild);
+  const div  = document.createElement('div');
+  div.id     = 'yt-player';
+  wrap.insertBefore(div, wrap.firstChild);
 
   ytPlayer = new YT.Player('yt-player', {
     width:  '100%',
     height: '100%',
-    videoId,
+    videoId: videoId,
     playerVars: {
-      autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1,
-      enablejsapi: 1
+      autoplay:        1,
+      rel:             0,
+      modestbranding:  1,
+      playsinline:     1,
+      enablejsapi:     1
     },
     events: {
-      onReady:       onYTReady,
-      onStateChange: onYTStateChange
+      onReady:       _onYTReady,
+      onStateChange: _onYTStateChange,
+      onError:       _onYTError
     }
   });
 }
 
-function onYTReady(e) {
-  // Duration may be 0 before video loads — listen for it
+function _onYTReady(e) {
+  sysmsg('▶ YouTube готов!');
   e.target.playVideo();
-  // Poll duration until available
-  const checkDur = setInterval(() => {
+  // Ждём пока duration станет > 0
+  const t = setInterval(() => {
     const d = e.target.getDuration();
-    if (d > 0) { ytDuration = d; clearInterval(checkDur); }
-  }, 200);
+    if (d > 0) { ytDuration = d; clearInterval(t); }
+  }, 300);
   startYTProgress();
 }
 
-function onYTStateChange(e) {
-  if (syncLockYT) return;  // не реагируем на изменения которые сами вызвали
+function _onYTError(e) {
+  const codes = { 2:'Неверный ID видео', 5:'HTML5 ошибка', 100:'Видео не найдено', 101:'Embedding запрещён', 150:'Embedding запрещён' };
+  toast('YouTube ошибка: ' + (codes[e.data] || 'код ' + e.data));
+  sysmsg('❌ YouTube: ' + (codes[e.data] || 'ошибка ' + e.data));
+}
 
-  const s = e.data;
+function _onYTStateChange(e) {
+  if (syncLockYT) return;
+
+  const s   = e.data;
   const now = Date.now();
-  const t = ytPlayer.getCurrentTime();
-  ytDuration = ytPlayer.getDuration();
+  const t   = ytPlayer.getCurrentTime();
+  ytDuration = ytPlayer.getDuration() || ytDuration;
 
-  // Throttle: не спамим события чаще раза в 300мс
-  if (now - lastSyncTime < 300 && s === ytState) return;
+  if (now - lastSyncTime < 200 && s === ytState) return;
   lastSyncTime = now;
+  ytState = s;
 
   if (s === YT.PlayerState.PLAYING) {
-    ytState = s;
-    // Отправляем обоим: play + текущее время + timestamp для компенсации лага
-    sendYTCommand({ type: 'yt-state', action: 'play', t, ts: now });
+    sendSync({ type:'yt-state', action:'play',  t, d:ytDuration, ts:now });
     startYTProgress();
     updateOverlayBtn(true);
-  } else if (s === YT.PlayerState.PAUSED) {
-    ytState = s;
-    sendYTCommand({ type: 'yt-state', action: 'pause', t, ts: now });
+  } else if (s === YT.PlayerState.PAUSED || s === YT.PlayerState.ENDED) {
+    sendSync({ type:'yt-state', action:'pause', t, d:ytDuration, ts:now });
     stopYTProgress();
     updateOverlayBtn(false);
-  } else if (s === YT.PlayerState.ENDED) {
-    ytState = s;
-    sendYTCommand({ type: 'yt-state', action: 'pause', t, ts: now });
-    stopYTProgress();
-    updateOverlayBtn(false);
+    updateYTProgress(t, ytDuration);
   }
 }
 
-// Отправляет команду СЕБЕ (через handleYTState) и партнёру (через sendSync)
-function sendYTCommand(payload) {
-  sendSync(payload);
-  // Применяем локально тоже — но только если мы инициатор (не из handleSync)
-}
-
 function handleYTState(msg) {
-  // Компенсация сетевого лага: сдвигаем время на задержку доставки
-  const lag = (Date.now() - msg.ts) / 1000;  // секунды
-  const targetTime = msg.t + (msg.action === 'play' ? lag : 0);
+  const lag = Math.min((Date.now() - msg.ts) / 1000, 3); // не больше 3с компенсации
+  const tgt = msg.action === 'play' ? msg.t + lag : msg.t;
+  if (msg.d) ytDuration = msg.d;
 
   syncLockYT = true;
-  setTimeout(() => syncLockYT = false, 800);
+  setTimeout(() => syncLockYT = false, 1000);
 
   if (msg.action === 'play') {
-    ytState = YT.PlayerState.PLAYING;
-    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
-      ytPlayer.seekTo(targetTime, true);
-      ytPlayer.playVideo();
-    }
+    ytState = 1;
+    if (ytPlayer && ytPlayer.seekTo) { ytPlayer.seekTo(tgt, true); ytPlayer.playVideo(); }
     startYTProgress();
     updateOverlayBtn(true);
   } else if (msg.action === 'pause') {
-    ytState = YT.PlayerState.PAUSED;
-    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
-      ytPlayer.seekTo(msg.t, true);
-      ytPlayer.pauseVideo();
-    }
+    ytState = 2;
+    if (ytPlayer && ytPlayer.seekTo) { ytPlayer.seekTo(msg.t, true); ytPlayer.pauseVideo(); }
     stopYTProgress();
     updateOverlayBtn(false);
     updateYTProgress(msg.t, ytDuration);
   } else if (msg.action === 'seek') {
-    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
-      ytPlayer.seekTo(targetTime, true);
-      if (ytState === YT.PlayerState.PLAYING) ytPlayer.playVideo();
+    if (ytPlayer && ytPlayer.seekTo) {
+      ytPlayer.seekTo(tgt, true);
+      if (ytState === 1) ytPlayer.playVideo();
     }
-    updateYTProgress(targetTime, ytDuration);
+    updateYTProgress(tgt, ytDuration);
   }
   showSyncInd();
 }
 
-// Кнопка play/pause на overlay — одинаково для хоста и гостя
 function guestTogglePlay() {
   if (!ytPlayer) return;
   const t = typeof ytPlayer.getCurrentTime === 'function' ? ytPlayer.getCurrentTime() : 0;
@@ -1678,5 +1680,6 @@ function leaveRoom(){
   } catch(e){}
 })();
 </script>
+<script id="yt-api-script" src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
