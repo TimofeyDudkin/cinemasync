@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════
-//  CinemaSync — сигнальный сервер + relay fallback
+//  CinemaSync — сервер с поддержкой переподключения
 // ═══════════════════════════════════════════
 
 const http  = require('http');
@@ -7,16 +7,17 @@ const fs    = require('fs');
 const path  = require('path');
 const { WebSocketServer } = require('ws');
 
-const PORT = process.env.PORT || 3000;
+const PORT          = process.env.PORT || 3000;
 const PING_INTERVAL = 25000;
+const ROOM_TTL      = 5 * 60 * 1000; // комната живёт 5 минут после ухода хоста
 
 const rooms = {};
+// rooms[id] = { host: ws|null, guest: ws|null, state: {...}, expireTimer: null }
 
+// ── HTTP
 const httpServer = http.createServer((req, res) => {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = filePath.split('?')[0];
+  let filePath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
   const fullPath = path.join(__dirname, 'public', filePath);
-
   fs.readFile(fullPath, (err, data) => {
     if (err) {
       fs.readFile(path.join(__dirname, 'public', 'index.html'), (e, d) => {
@@ -26,9 +27,8 @@ const httpServer = http.createServer((req, res) => {
       });
       return;
     }
-    const ext = path.extname(filePath);
-    const types = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.ico':'image/x-icon' };
-    res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream' });
+    const types = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.png':'image/png', '.ico':'image/x-icon' };
+    res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream' });
     res.end(data);
   });
 });
@@ -37,6 +37,29 @@ const wss = new WebSocketServer({ server: httpServer });
 
 function send(ws, data) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(data));
+}
+
+function getOrCreateRoom(id) {
+  if (!rooms[id]) rooms[id] = { host: null, guest: null, state: null, expireTimer: null };
+  // Отменяем удаление комнаты если кто-то заходит
+  if (rooms[id].expireTimer) {
+    clearTimeout(rooms[id].expireTimer);
+    rooms[id].expireTimer = null;
+  }
+  return rooms[id];
+}
+
+function scheduleRoomExpiry(id) {
+  const room = rooms[id];
+  if (!room) return;
+  if (room.expireTimer) clearTimeout(room.expireTimer);
+  room.expireTimer = setTimeout(() => {
+    // Удаляем только если оба отключены
+    if (!room.host && !room.guest) {
+      delete rooms[id];
+      console.log(`[~] Room ${id} expired`);
+    }
+  }, ROOM_TTL);
 }
 
 wss.on('connection', (ws) => {
@@ -49,7 +72,6 @@ wss.on('connection', (ws) => {
     ws._alive = false;
     ws.ping();
   }, PING_INTERVAL);
-
   ws.on('pong', () => { ws._alive = true; });
 
   ws.on('message', (raw) => {
@@ -57,28 +79,51 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw); } catch { return; }
 
     switch (msg.type) {
+
       case 'create': {
         const id = msg.roomId.toUpperCase();
-        if (!rooms[id]) rooms[id] = { host: null, guest: null };
-        rooms[id].host = ws;
+        const room = getOrCreateRoom(id);
+        room.host = ws;
         ws._roomId = id; ws._role = 'host';
-        send(ws, { type: 'created', roomId: id });
-        console.log(`[+] Room ${id} created`);
+        send(ws, { type: 'created', roomId: id, state: room.state });
+        // Если гость уже ждёт — сообщаем ему
+        if (room.guest) {
+          send(room.guest, { type: 'host-reconnected' });
+          send(ws, { type: 'guest-joined' });
+        }
+        console.log(`[+] Room ${id} host connected`);
         break;
       }
+
       case 'join': {
         const id = msg.roomId.toUpperCase();
-        if (!rooms[id] || !rooms[id].host) {
-          send(ws, { type: 'error', msg: 'Комната не найдена или хост отключился' });
+        // Комната существует, даже если хост временно отключился
+        const room = getOrCreateRoom(id);
+
+        if (!room.host) {
+          // Хост отключён — гость ждёт
+          room.guest = ws;
+          ws._roomId = id; ws._role = 'guest';
+          send(ws, { type: 'waiting-for-host', roomId: id });
+          console.log(`[~] Room ${id}: guest waiting for host`);
           return;
         }
-        rooms[id].guest = ws;
+
+        room.guest = ws;
         ws._roomId = id; ws._role = 'guest';
-        send(rooms[id].host, { type: 'guest-joined' });
-        send(ws, { type: 'joined', roomId: id });
-        console.log(`[+] Guest joined room ${id}`);
+        send(room.host, { type: 'guest-joined' });
+        send(ws, { type: 'joined', roomId: id, state: room.state });
+        console.log(`[+] Room ${id}: guest joined`);
         break;
       }
+
+      // Хост сохраняет текущее состояние плеера
+      case 'save-state': {
+        const room = rooms[ws._roomId];
+        if (room) room.state = msg.state;
+        break;
+      }
+
       case 'offer':
       case 'answer':
       case 'ice': {
@@ -87,7 +132,7 @@ wss.on('connection', (ws) => {
         send(target, msg);
         break;
       }
-      // relay: пробрасываем sync-сообщения через сервер (fallback когда P2P не работает)
+
       case 'sync':
       case 'relay-mode': {
         const room = rooms[ws._roomId]; if (!room) return;
@@ -104,14 +149,17 @@ wss.on('connection', (ws) => {
     const id = ws._roomId;
     if (!id || !rooms[id]) return;
     const room = rooms[id];
+
     if (ws._role === 'host') {
-      send(room.guest, { type: 'peer-left' });
-      delete rooms[id];
-      console.log(`[-] Room ${id} closed (host left)`);
+      room.host = null;
+      send(room.guest, { type: 'host-disconnected' }); // мягкое уведомление вместо peer-left
+      scheduleRoomExpiry(id);
+      console.log(`[-] Room ${id}: host disconnected (room preserved ${ROOM_TTL/1000}s)`);
     } else {
-      send(room.host, { type: 'peer-left' });
       room.guest = null;
-      console.log(`[-] Guest left room ${id}`);
+      send(room.host, { type: 'peer-left' });
+      scheduleRoomExpiry(id);
+      console.log(`[-] Room ${id}: guest disconnected`);
     }
   });
 
@@ -119,7 +167,6 @@ wss.on('connection', (ws) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`\n🎬 CinemaSync запущен на порту ${PORT}`);
-  console.log(`   http://localhost:${PORT}`);
-  console.log(`   Relay fallback: ✓  Keepalive: ✓\n`);
+  console.log(`\n🎬 CinemaSync on :${PORT}`);
+  console.log(`   Reconnect window: ${ROOM_TTL/1000}s\n`);
 });
