@@ -622,28 +622,23 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 const IS_SERVER = location.protocol === 'http:' || location.protocol === 'https:';
 const WS_URL    = IS_SERVER ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host : null;
 
-// ICE: STUN + бесплатный публичный TURN (metered.ca)
+// ICE: несколько STUN-серверов + relay fallback через WebSocket
 const ICE_CFG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls:       'turn:openrelay.metered.ca:80',
-      username:   'openrelayproject',
-      credential: 'openrelayproject'
-    },
-    {
-      urls:       'turn:openrelay.metered.ca:443',
-      username:   'openrelayproject',
-      credential: 'openrelayproject'
-    },
-    {
-      urls:       'turn:openrelay.metered.ca:443?transport=tcp',
-      username:   'openrelayproject',
-      credential: 'openrelayproject'
-    }
-  ]
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.nextcloud.com:443'   }
+  ],
+  iceCandidatePoolSize: 10
 };
+
+// ── Relay режим: когда P2P не работает — синхронизируем через WS-сервер
+let relayMode = false;
+const P2P_TIMEOUT = 12000;
+let p2pTimer = null;
 
 // ── State
 let roomId      = null;
@@ -845,6 +840,14 @@ function setupWS() {
         document.getElementById('peer-nocam').style.display = 'flex';
         peerV.srcObject = null;
         break;
+
+      case 'relay-mode':
+        if (!relayMode) {
+          relayMode = true;
+          setStatus('on', 'Relay режим ✓');
+          sysmsg('⚡ Соединение через сервер (relay)');
+        }
+        break;
     }
   };
 }
@@ -882,6 +885,8 @@ async function startPeerConnection(makeOffer) {
   if (pc) { pc.close(); pc = null; }
   iceCandidateQueue = [];
   remoteDescSet = false;
+  relayMode = false;
+  clearTimeout(p2pTimer);
 
   log('Starting PeerConnection, makeOffer=' + makeOffer);
   pc = new RTCPeerConnection(ICE_CFG);
@@ -927,6 +932,8 @@ async function startPeerConnection(makeOffer) {
     const s = pc.connectionState;
     log('Connection state: ' + s);
     if (s === 'connected') {
+      clearTimeout(p2pTimer);
+      relayMode = false;
       setStatus('on', 'Подключено ✓');
       sysmsg('🟢 Партнёр подключился!');
       addPart('Партнёр');
@@ -935,8 +942,9 @@ async function startPeerConnection(makeOffer) {
     } else if (s === 'disconnected') {
       setStatus('off', 'Разрыв — переподключение...');
     } else if (s === 'failed') {
-      setStatus('off', 'Соединение не удалось');
-      sysmsg('❌ Не удалось установить P2P соединение');
+      clearTimeout(p2pTimer);
+      log('P2P failed — switching to relay mode');
+      enableRelayMode();
     }
   };
 
@@ -949,10 +957,40 @@ async function startPeerConnection(makeOffer) {
     const offerMsg = { type: 'offer', sdp: offer };
     if (IS_SERVER) wsSend(offerMsg); else localSend(offerMsg);
     log('Offer sent');
+
+    // Таймер: если P2P не установился за 12 сек — переходим на relay
+    clearTimeout(p2pTimer);
+    p2pTimer = setTimeout(() => {
+      if (pc && pc.connectionState !== 'connected') {
+        log('P2P timeout — switching to relay mode');
+        enableRelayMode();
+      }
+    }, P2P_TIMEOUT);
   } else {
     // Гость: ждём DataChannel от хоста
     pc.ondatachannel = (e) => { dc = e.channel; setupDC(dc); log('DataChannel received'); };
+
+    // Таймер для гостя тоже
+    clearTimeout(p2pTimer);
+    p2pTimer = setTimeout(() => {
+      if (pc && pc.connectionState !== 'connected') {
+        log('P2P timeout (guest) — switching to relay mode');
+        enableRelayMode();
+      }
+    }, P2P_TIMEOUT);
   }
+}
+
+// ══════════ RELAY MODE FALLBACK ══════════
+
+function enableRelayMode() {
+  if (relayMode) return; // уже включён
+  relayMode = true;
+  setStatus('on', 'Relay режим ✓');
+  sysmsg('⚡ P2P недоступен — синхронизация через сервер (relay)');
+  toast('Relay режим: работает через сервер');
+  if (IS_SERVER) wsSend({ type: 'relay-mode' }); else localSend({ type: 'relay-mode' });
+  // Уведомляем о relay режиме у партнёра тоже через onmessage
 }
 
 function setupDC(channel) {
@@ -965,7 +1003,7 @@ function setupDC(channel) {
 // ══════════ SYNC ══════════
 
 function sendSync(payload) {
-  if (dc && dc.readyState === 'open') {
+  if (!relayMode && dc && dc.readyState === 'open') {
     dc.send(JSON.stringify(payload));
   } else if (IS_SERVER) {
     wsSend({ type: 'sync', payload });
