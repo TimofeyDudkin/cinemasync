@@ -153,6 +153,24 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 #go-fill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0%;border-radius:2px;transition:width .3s}
 #go-time{font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
 
+/* VK overlay — same style */
+#vk-overlay{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;
+  background:rgba(8,12,18,.9);backdrop-filter:blur(24px);
+  padding:8px 16px;border-radius:16px;border:1px solid var(--border);
+  z-index:40;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+#vk-playpause{
+  background:var(--s2);border:1px solid var(--border);color:var(--text);
+  width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+#vk-playpause:hover{background:var(--s3)}
+#vk-progress{
+  width:140px;height:4px;background:rgba(255,255,255,.1);
+  border-radius:2px;cursor:pointer;position:relative;overflow:hidden;flex-shrink:0}
+#vk-fill{height:100%;background:linear-gradient(90deg,#0077ff,#60a5fa);width:0%;border-radius:2px;transition:width .3s}
+#vk-time{font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
 /* placeholder */
 .vph{
   position:absolute;inset:0;display:flex;flex-direction:column;
@@ -439,34 +457,55 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 /* ════════════════════════════════════
    MOBILE
 ════════════════════════════════════ */
+/* ══════════════ MOBILE ══════════════ */
 @media(max-width:768px){
-  body{overflow:auto}
-  #room{height:100dvh;flex-direction:column}
-  .main{flex-direction:column;flex:1;min-height:0}
-  .vwrap{flex:none;height:52dvh;min-height:190px}
-  .sidebar{width:100%;flex:1;min-height:0;border-left:none;border-top:1px solid var(--border)}
-  #peer-wrap{width:108px;height:76px;bottom:66px;right:8px}
-  #my-wrap{width:86px;height:60px;bottom:66px;left:8px}
-  .cam-vol,.mic-vol{opacity:1}
-  .callbar{height:52px;gap:6px}
-  .cb-btn{width:36px;height:36px;font-size:.85rem}
-  .topbar{padding:0 10px;gap:8px}
-  .tb-logo{font-size:.95rem}
-  .vcontrols{padding:7px 9px;gap:6px;max-width:calc(100vw - 18px);border-radius:12px}
-  .vdiv{display:none}
+  body{overflow:hidden}
+  /* Landing */
   .land-features{gap:9px}
   .lf{width:calc(50% - 8px);max-width:155px}
   .land-actions{flex-direction:column;align-items:center}
-  .btn{width:210px;justify-content:center}
+  .btn{width:220px;justify-content:center}
   .join-row{flex-direction:column;align-items:center}
-  .join-row .inp{width:210px}
-  .stab{font-size:.67rem;padding:11px 3px}
-  #room .tb-logo{display:none}
+  .join-row .inp{width:220px}
+  /* Room */
+  #room{height:100dvh;flex-direction:column;overflow:hidden}
+  .topbar{height:48px;padding:0 12px;gap:8px}
+  .tb-logo{display:none}
+  .tb-status-txt{font-size:.7rem}
+  .main{flex-direction:column;flex:1;min-height:0;overflow:hidden}
+  .vwrap{flex:none;height:44dvh;min-height:170px}
+  .sidebar{width:100%;flex:1;min-height:0;overflow:hidden;border-left:none;border-top:1px solid var(--border)}
+  .stab{font-size:.68rem;padding:10px 3px;letter-spacing:0}
+  .callbar{height:54px;gap:8px;padding:0 12px 8px}
+  .cb-btn{width:40px;height:40px;font-size:.9rem;border-radius:12px}
+  #peer-wrap{width:96px;height:68px;bottom:8px;right:8px;border-radius:10px}
+  #my-wrap{width:76px;height:54px;bottom:8px;left:8px;border-radius:10px}
+  .cam-vol,.mic-vol{opacity:1}
+  .vol-range{width:38px}
+  .vcontrols{left:0;right:0;bottom:0;transform:none;border-radius:0;border-left:none;border-right:none;border-bottom:none;padding:8px 12px;gap:7px;max-width:100%}
+  #guest-overlay{left:0;right:0;bottom:0;transform:none;border-radius:0;border-left:none;border-right:none;border-bottom:none;padding:8px 12px;gap:7px;max-width:100%}
+  #vk-overlay{left:0;right:0;bottom:0;transform:none;border-radius:0;border-left:none;border-right:none;border-bottom:none;padding:8px 12px;gap:7px;max-width:100%}
+  .prog-wrap{min-width:70px}
+  .vdiv{display:none}
+  .reacts{display:none}
+  .msgs{padding:10px}
+  .chat-foot{padding:8px 10px}
+  .vpanel{padding:10px;gap:9px}
+  .srcs{gap:4px}
+  .src-btn{padding:5px 8px;font-size:.7rem}
+  .sync-ind,.recon-banner,.iframe-note{top:8px}
 }
 @media(max-width:420px){
   .lf{width:calc(50% - 6px)}
-  #peer-wrap{width:90px;height:64px}
-  #my-wrap{width:74px;height:52px}
+  #peer-wrap{width:84px;height:60px}
+  #my-wrap{width:68px;height:48px}
+  .cb-btn{width:36px;height:36px;font-size:.82rem}
+  .vwrap{height:40dvh}
+}
+
+/* ── Safe area поддержка (iPhone notch) */
+@supports(padding-bottom: env(safe-area-inset-bottom)){
+  .callbar{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 }
 </style>
 </head>
@@ -524,6 +563,13 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
       </div>
       <!-- VK / Kinopoisk iframe -->
       <iframe id="iframe-player" allow="autoplay; fullscreen; encrypted-media"></iframe>
+      <!-- VK overlay controls -->
+      <div id="vk-overlay" style="display:none">
+        <button id="vk-playpause" onclick="vkTogglePlay()">▶</button>
+        <div id="vk-progress" onclick="vkSeek(event)"><div id="vk-fill"></div></div>
+        <span id="vk-time">0:00 / 0:00</span>
+        <button onclick="toggleFS()" style="margin-left:8px">⛶</button>
+      </div>
       <!-- Guest overlay controls (shown only for guest when embed is playing) -->
       <div id="guest-overlay" style="display:none">
         <button id="go-playpause" onclick="guestTogglePlay()">▶</button>
@@ -1083,6 +1129,151 @@ function sendSync(payload) {
   }
 }
 
+// ── VK VIDEO SYNC ──────────────────────────────────
+// VK плеер поддерживает postMessage API (js_api=1)
+// Оба держат плеер — синхронизация как у YouTube
+
+let vkState       = 'paused';  // 'playing' | 'paused'
+let vkDuration    = 0;
+let vkCurrentTime = 0;
+let vkProgressTimer = null;
+let syncLockVK    = false;
+let vkMsgListener = null;
+
+function startVKListener() {
+  stopVKListener();
+  vkMsgListener = (e) => {
+    if (!e.data || typeof e.data !== 'string') return;
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    // VK отправляет события: inited, started, paused, resumed, stopped, timeupdate, durationchange
+    if (!msg.handler && !msg.event) return;
+    const ev   = msg.handler || msg.event;
+    const data = msg.info || msg.data || {};
+    const now  = Date.now();
+
+    if (syncLockVK) return;
+
+    if (ev === 'inited') {
+      // Плеер готов — запрашиваем состояние
+      vkPostMsg({ method:'getCurrentTime' });
+      vkPostMsg({ method:'getDuration' });
+    } else if (ev === 'durationchange' || ev === 'duration') {
+      vkDuration = data.duration || data.d || 0;
+    } else if (ev === 'timeupdate' || ev === 'time') {
+      vkCurrentTime = data.time || data.currentTime || 0;
+      updateVKProgress(vkCurrentTime, vkDuration);
+    } else if (ev === 'started' || ev === 'resumed' || ev === 'play') {
+      vkState = 'playing';
+      updateVKBtn(true);
+      startVKProgress();
+      sendSync({ type:'vk-state', action:'play', t:vkCurrentTime, d:vkDuration, ts:now });
+    } else if (ev === 'paused' || ev === 'pause' || ev === 'stopped') {
+      vkState = 'paused';
+      updateVKBtn(false);
+      stopVKProgress();
+      updateVKProgress(vkCurrentTime, vkDuration);
+      sendSync({ type:'vk-state', action:'pause', t:vkCurrentTime, d:vkDuration, ts:now });
+    }
+  };
+  window.addEventListener('message', vkMsgListener);
+}
+
+function stopVKListener() {
+  if (vkMsgListener) { window.removeEventListener('message', vkMsgListener); vkMsgListener = null; }
+  stopVKProgress();
+}
+
+function vkPostMsg(data) {
+  const ifr = document.getElementById('iframe-player');
+  if (ifr && ifr.contentWindow) {
+    try { ifr.contentWindow.postMessage(JSON.stringify(data), '*'); } catch(e) {}
+  }
+}
+
+function handleVKState(msg) {
+  const lag = Math.min((Date.now() - msg.ts) / 1000, 3);
+  const tgt = msg.action === 'play' ? msg.t + lag : msg.t;
+  if (msg.d) vkDuration = msg.d;
+
+  syncLockVK = true;
+  setTimeout(() => syncLockVK = false, 800);
+
+  if (msg.action === 'play') {
+    vkState = 'playing';
+    if (tgt > 0.5) vkPostMsg({ method:'seek', params: [tgt] });
+    vkPostMsg({ method:'play' });
+    startVKProgress();
+    updateVKBtn(true);
+  } else if (msg.action === 'pause') {
+    vkState = 'paused';
+    if (msg.t > 0) vkPostMsg({ method:'seek', params: [msg.t] });
+    vkPostMsg({ method:'pause' });
+    stopVKProgress();
+    updateVKBtn(false);
+    updateVKProgress(msg.t, vkDuration);
+  } else if (msg.action === 'seek') {
+    vkPostMsg({ method:'seek', params: [tgt] });
+    if (vkState === 'playing') vkPostMsg({ method:'play' });
+    updateVKProgress(tgt, vkDuration);
+  }
+  showSyncInd();
+}
+
+function vkTogglePlay() {
+  const now = Date.now();
+  syncLockVK = true;
+  setTimeout(() => syncLockVK = false, 800);
+  if (vkState === 'playing') {
+    vkPostMsg({ method:'pause' });
+    vkState = 'paused';
+    stopVKProgress();
+    updateVKBtn(false);
+    sendSync({ type:'vk-state', action:'pause', t:vkCurrentTime, d:vkDuration, ts:now });
+  } else {
+    vkPostMsg({ method:'play' });
+    vkState = 'playing';
+    startVKProgress();
+    updateVKBtn(true);
+    sendSync({ type:'vk-state', action:'play', t:vkCurrentTime, d:vkDuration, ts:now });
+  }
+}
+
+function vkSeek(e) {
+  const bar = document.getElementById('vk-progress');
+  const r   = bar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  const t   = pct * vkDuration;
+  const now = Date.now();
+  syncLockVK = true;
+  setTimeout(() => syncLockVK = false, 800);
+  vkPostMsg({ method:'seek', params: [t] });
+  if (vkState === 'playing') vkPostMsg({ method:'play' });
+  vkCurrentTime = t;
+  updateVKProgress(t, vkDuration);
+  sendSync({ type:'vk-state', action:'seek', t, d:vkDuration, ts:now });
+}
+
+function startVKProgress() {
+  stopVKProgress();
+  vkProgressTimer = setInterval(() => {
+    if (vkState !== 'playing') return;
+    vkCurrentTime = Math.min(vkCurrentTime + 0.25, vkDuration);
+    updateVKProgress(vkCurrentTime, vkDuration);
+    // Запрашиваем реальное время каждые 2 сек
+    if (Math.round(vkCurrentTime) % 2 === 0) vkPostMsg({ method:'getCurrentTime' });
+  }, 250);
+}
+function stopVKProgress() { clearInterval(vkProgressTimer); vkProgressTimer = null; }
+
+function updateVKProgress(t, d) {
+  document.getElementById('vk-fill').style.width  = d ? (t/d*100)+'%' : '0%';
+  document.getElementById('vk-time').textContent  = fmt(t) + ' / ' + fmt(d);
+}
+function updateVKBtn(playing) {
+  document.getElementById('vk-playpause').textContent = playing ? '⏸' : '▶';
+}
+
 function handleSync(msg) {
   switch (msg.type) {
     // ── MP4 sync
@@ -1104,6 +1295,7 @@ function handleSync(msg) {
       handleYTState(msg); break;
 
     case 'load-mp4':   loadVideoSrc(msg.src, msg.name, false); break;
+    case 'vk-state':   handleVKState(msg); break;
     case 'load-embed': loadIframe(msg.url, msg.label, msg.orig, msg.src_type); break;
     case 'chat':       addMsg(msg.text, 'them'); break;
     case 'react':      floatReact(msg.e); break;
@@ -1165,7 +1357,7 @@ function ytId(u) {
 }
 function vkEmbed(u) {
   const m = u.match(/video(-?\d+)_(\d+)/);
-  if (m) return 'https://vkvideo.ru/video_ext.php?oid=' + m[1] + '&id=' + m[2] + '&hd=2&autoplay=1';
+  if (m) return 'https://vkvideo.ru/video_ext.php?oid=' + m[1] + '&id=' + m[2] + '&hd=2&autoplay=1&js_api=1';
   if (u.includes('video_ext')) return u;
   return null;
 }
@@ -1402,7 +1594,7 @@ function updateGuestOverlay() {
 }
 
 function loadIframe(url, label, orig, srcType) {
-  // Скрываем YT
+  // Скрываем YT и VK overlay
   document.getElementById('yt-wrap').style.display = 'none';
   document.getElementById('guest-overlay').style.display = 'none';
   stopYTProgress();
@@ -1412,9 +1604,21 @@ function loadIframe(url, label, orig, srcType) {
   ifr.src = url; ifr.style.display = 'block';
   document.getElementById('vph').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'none';
-  const notes = { vk:'▶ VK Видео — нажмите Play', kinopoisk:'🎬 Кинопоиск — нужна подписка' };
-  const n = document.getElementById('iframe-note');
-  n.textContent = notes[srcType] || ''; n.style.display = notes[srcType] ? 'block' : 'none';
+  document.getElementById('iframe-note').style.display = 'none';
+
+  if (srcType === 'vk') {
+    document.getElementById('vk-overlay').style.display = 'flex';
+    vkState = 'paused'; vkDuration = 0; vkCurrentTime = 0;
+    // Слушаем postMessage от VK плеера
+    startVKListener();
+  } else {
+    document.getElementById('vk-overlay').style.display = 'none';
+    stopVKListener();
+    const notes = { kinopoisk:'🎬 Кинопоиск — нужна подписка' };
+    const n = document.getElementById('iframe-note');
+    n.textContent = notes[srcType] || ''; n.style.display = notes[srcType] ? 'block' : 'none';
+  }
+
   const nm = label + ': ' + (orig && orig.length > 38 ? orig.slice(0,38)+'...' : (orig||''));
   playlist.push({ n:nm, url, orig:orig||'', srcType, isEmbed:true }); renderPL();
   sysmsg('🎬 ' + label + ' загружен!');
