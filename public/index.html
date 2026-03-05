@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CinemaSync</title>
+<script src="https://www.youtube.com/iframe_api"></script>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -132,6 +133,25 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 #main-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
 #iframe-player{position:absolute;inset:0;width:100%;height:100%;border:none;display:none;background:#000}
+#yt-player iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+
+/* ── GUEST OVERLAY — управление у гостя поверх плеера хоста */
+#guest-overlay{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;
+  background:rgba(8,12,18,.9);backdrop-filter:blur(24px);
+  padding:8px 16px;border-radius:16px;border:1px solid var(--border);
+  z-index:40;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+#go-playpause{
+  background:var(--s2);border:1px solid var(--border);color:var(--text);
+  width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+#go-playpause:hover{background:var(--s3)}
+#go-progress{
+  width:140px;height:4px;background:rgba(255,255,255,.1);
+  border-radius:2px;cursor:pointer;position:relative;overflow:hidden;flex-shrink:0}
+#go-fill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0%;border-radius:2px;transition:width .3s}
+#go-time{font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* placeholder */
 .vph{
@@ -498,7 +518,19 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
     <!-- Video -->
     <div class="vwrap" id="vwrap">
       <video id="main-video" preload="metadata"></video>
+      <!-- YouTube IFrame API -->
+      <div id="yt-wrap" style="position:absolute;inset:0;display:none;background:#000;z-index:1">
+        <div id="yt-player" style="width:100%;height:100%"></div>
+      </div>
+      <!-- VK / Kinopoisk iframe -->
       <iframe id="iframe-player" allowfullscreen allow="autoplay;fullscreen;encrypted-media"></iframe>
+      <!-- Guest overlay controls (shown only for guest when embed is playing) -->
+      <div id="guest-overlay" style="display:none">
+        <button id="go-playpause" onclick="guestTogglePlay()">▶</button>
+        <div id="go-progress" onclick="guestSeek(event)"><div id="go-fill"></div></div>
+        <span id="go-time">0:00 / 0:00</span>
+        <button onclick="toggleFS()" style="margin-left:8px">⛶</button>
+      </div>
 
       <div class="vph" id="vph">
         <div class="vph-icon">🎬</div>
@@ -905,6 +937,10 @@ function saveState() {
 }
 
 function getCurrentPlayerState() {
+  const ytWrap = document.getElementById('yt-wrap');
+  if (ytWrap.style.display !== 'none' && ytPlayer) {
+    return { type:'youtube', videoId:ytPlayer.getVideoData ? ytPlayer.getVideoData().video_id : '', orig:'' };
+  }
   const ifr = document.getElementById('iframe-player');
   if (ifr.style.display !== 'none' && ifr.src) {
     return { type:'embed', url:ifr.src, srcType:currentSrc };
@@ -917,8 +953,10 @@ function getCurrentPlayerState() {
 
 function restoreState(state) {
   if (!state) return;
-  if (state.type === 'embed') {
-    loadIframe(state.url, state.srcType || 'video', state.url, state.srcType || 'youtube');
+  if (state.type === 'youtube') {
+    loadYouTube(state.videoId, state.orig || '');
+  } else if (state.type === 'embed') {
+    loadIframe(state.url, state.srcType || 'video', state.url, state.srcType || 'vk');
   } else if (state.type === 'mp4' && state.src && !state.src.startsWith('blob:')) {
     loadVideoSrc(state.src, state.src.split('/').pop() || 'Видео', false);
     if (state.time) { vid.currentTime = state.time; }
@@ -1047,6 +1085,7 @@ function sendSync(payload) {
 
 function handleSync(msg) {
   switch (msg.type) {
+    // ── MP4 sync
     case 'play':
       syncLock = true; vid.currentTime = msg.t; vid.play(); showSyncInd();
       setTimeout(() => syncLock = false, 700); break;
@@ -1056,6 +1095,73 @@ function handleSync(msg) {
     case 'seek':
       syncLock = true; vid.currentTime = msg.t; showSyncInd();
       setTimeout(() => syncLock = false, 400); break;
+
+    // ── YouTube: хост рассылает состояние гостю
+    case 'load-yt':
+      loadYouTube(msg.videoId, msg.orig); break;
+
+    case 'yt-play':
+      ytState = 1; // PLAYING
+      ytDuration = msg.d || ytDuration;
+      updateYTProgress(msg.t, ytDuration);
+      showSyncInd();
+      // Запускаем прогресс-бар у гостя без реального плеера
+      if (!isHost) {
+        let _t = msg.t, _start = Date.now();
+        stopYTProgress();
+        ytProgressTimer = setInterval(() => {
+          const elapsed = (Date.now() - _start) / 1000;
+          updateYTProgress(_t + elapsed, ytDuration);
+        }, 500);
+      }
+      break;
+
+    case 'yt-pause':
+      ytState = 2; // PAUSED
+      stopYTProgress();
+      updateYTProgress(msg.t, ytDuration);
+      showSyncInd();
+      break;
+
+    case 'yt-seek':
+      if (!isHost) {
+        // Перезапускаем прогресс с новой позиции
+        const wasPlaying = ytState === 1;
+        stopYTProgress();
+        updateYTProgress(msg.t, ytDuration);
+        if (wasPlaying) {
+          let _t = msg.t, _start = Date.now();
+          ytProgressTimer = setInterval(() => {
+            updateYTProgress(_t + (Date.now()-_start)/1000, ytDuration);
+          }, 500);
+        }
+      }
+      showSyncInd();
+      break;
+
+    case 'yt-tick':
+      // Коррекция рассинхронизации (каждые 5 сек от хоста)
+      if (!isHost) {
+        ytDuration = msg.d || ytDuration;
+        stopYTProgress();
+        let _t = msg.t, _start = Date.now();
+        ytProgressTimer = setInterval(() => {
+          updateYTProgress(_t + (Date.now()-_start)/1000, ytDuration);
+        }, 500);
+      }
+      break;
+
+    // ── Команды от гостя → выполняет хост
+    case 'yt-cmd-play':
+      if (isHost && ytPlayer) { ytPlayer.playVideo(); }
+      break;
+    case 'yt-cmd-pause':
+      if (isHost && ytPlayer) { ytPlayer.pauseVideo(); }
+      break;
+    case 'yt-cmd-seek':
+      if (isHost && ytPlayer) { ytPlayer.seekTo(msg.t, true); sendSync({ type:'yt-seek', t:msg.t }); }
+      break;
+
     case 'load-mp4':   loadVideoSrc(msg.src, msg.name, false); break;
     case 'load-embed': loadIframe(msg.url, msg.label, msg.orig, msg.src_type); break;
     case 'chat':       addMsg(msg.text, 'them'); break;
@@ -1093,9 +1199,8 @@ function loadUrl() {
   if (currentSrc === 'youtube') {
     const id = ytId(url);
     if (!id) { toast('Не удалось распознать YouTube-ссылку'); return; }
-    const embed = 'https://www.youtube.com/embed/' + id + '?autoplay=1&rel=0&modestbranding=1';
-    loadIframe(embed, 'YouTube', url, 'youtube');
-    sendSync({ type:'load-embed', url:embed, label:'YouTube', orig:url, src_type:'youtube' });
+    loadYouTube(id, url);
+    sendSync({ type:'load-yt', videoId:id, orig:url });
   } else if (currentSrc === 'vk') {
     const embed = vkEmbed(url);
     if (!embed) { toast('Не удалось распознать VK-ссылку'); return; }
@@ -1131,22 +1236,168 @@ function kpEmbed(u) {
   return null;
 }
 
+// ── YOUTUBE IFRAME API ─────────────────────────────
+let ytPlayer = null;       // YT.Player instance
+let ytReady = false;       // API loaded
+let ytPendingId = null;    // video to load when API ready
+let ytState = -1;          // last known player state
+let ytDuration = 0;
+let ytProgressTimer = null;
+
+// Called by YouTube IFrame API when ready
+window.onYouTubeIframeAPIReady = function() {
+  ytReady = true;
+  if (ytPendingId) { _createYTPlayer(ytPendingId); ytPendingId = null; }
+};
+
+function loadYouTube(videoId, orig) {
+  // Hide other players
+  vid.style.display = 'none'; vid.src = '';
+  document.getElementById('iframe-player').style.display = 'none';
+  document.getElementById('vph').style.display = 'none';
+  document.getElementById('vcontrols').style.display = 'none';
+  document.getElementById('iframe-note').style.display = 'none';
+  document.getElementById('yt-wrap').style.display = 'block';
+
+  // Гость видит только overlay, не управляет плеером напрямую
+  updateGuestOverlay();
+
+  const nm = 'YouTube: ' + (orig && orig.length > 38 ? orig.slice(0,38)+'...' : (orig||videoId));
+  // avoid duplicate playlist entries
+  if (!playlist.find(p => p.videoId === videoId)) {
+    playlist.push({ n:nm, videoId, orig:orig||'', srcType:'youtube', isYT:true }); renderPL();
+  }
+  sysmsg('🎬 YouTube загружен!');
+  currentSrc = 'youtube';
+
+  if (!ytReady) { ytPendingId = videoId; return; }
+  if (ytPlayer) {
+    ytPlayer.loadVideoById(videoId);
+  } else {
+    _createYTPlayer(videoId);
+  }
+}
+
+function _createYTPlayer(videoId) {
+  // Reset div (API replaces it)
+  document.getElementById('yt-player').innerHTML = '';
+  ytPlayer = new YT.Player('yt-player', {
+    videoId,
+    playerVars: { autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+    events: {
+      onReady: (e) => { if (isHost) e.target.playVideo(); },
+      onStateChange: onYTStateChange
+    }
+  });
+}
+
+function onYTStateChange(e) {
+  if (!isHost) return; // только хост рассылает события
+  const s = e.data;
+  const t = ytPlayer ? ytPlayer.getCurrentTime() : 0;
+  ytDuration = ytPlayer ? ytPlayer.getDuration() : 0;
+
+  if (s === YT.PlayerState.PLAYING && ytState !== YT.PlayerState.PLAYING) {
+    sendSync({ type:'yt-play', t });
+    startYTProgress();
+  } else if (s === YT.PlayerState.PAUSED && ytState !== YT.PlayerState.PAUSED) {
+    sendSync({ type:'yt-pause', t });
+    stopYTProgress();
+  } else if (s === YT.PlayerState.ENDED) {
+    sendSync({ type:'yt-pause', t });
+    stopYTProgress();
+  }
+  ytState = s;
+  updateGuestOverlay();
+}
+
+function startYTProgress() {
+  stopYTProgress();
+  ytProgressTimer = setInterval(() => {
+    if (!ytPlayer) return;
+    const t = ytPlayer.getCurrentTime();
+    ytDuration = ytPlayer.getDuration();
+    // Периодически синкаем время (каждые 5 сек)
+    if (isHost && Math.round(t) % 5 === 0 && ytState === YT.PlayerState.PLAYING) {
+      sendSync({ type:'yt-tick', t, d:ytDuration });
+    }
+    updateYTProgress(t, ytDuration);
+  }, 500);
+}
+function stopYTProgress() { clearInterval(ytProgressTimer); }
+
+function updateYTProgress(t, d) {
+  document.getElementById('go-fill').style.width = d ? (t/d*100)+'%' : '0%';
+  document.getElementById('go-time').textContent = fmt(t) + ' / ' + fmt(d);
+  document.getElementById('go-playpause').textContent =
+    (ytState === YT.PlayerState.PLAYING) ? '⏸' : '▶';
+}
+
+function updateGuestOverlay() {
+  const wrap = document.getElementById('yt-wrap');
+  const overlay = document.getElementById('guest-overlay');
+  if (wrap.style.display !== 'none') {
+    // Overlay показываем всем (и хосту для перемотки тоже)
+    overlay.style.display = 'flex';
+  } else {
+    overlay.style.display = 'none';
+  }
+}
+
+// Гость нажимает play/pause → отправляет команду хосту
+function guestTogglePlay() {
+  if (isHost) {
+    // Хост управляет напрямую
+    if (ytPlayer) {
+      if (ytState === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+      else ytPlayer.playVideo();
+    }
+  } else {
+    // Гость отправляет команду хосту
+    const cmd = (document.getElementById('go-playpause').textContent === '⏸') ? 'yt-cmd-pause' : 'yt-cmd-play';
+    sendSync({ type: cmd });
+  }
+}
+
+function guestSeek(e) {
+  const bar = document.getElementById('go-progress');
+  const r = bar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  const t = pct * ytDuration;
+  if (isHost) {
+    if (ytPlayer) ytPlayer.seekTo(t, true);
+    sendSync({ type:'yt-seek', t });
+  } else {
+    sendSync({ type:'yt-cmd-seek', t });
+  }
+}
+
 function loadIframe(url, label, orig, srcType) {
+  // Скрываем YT
+  document.getElementById('yt-wrap').style.display = 'none';
+  document.getElementById('guest-overlay').style.display = 'none';
+  stopYTProgress();
+
   const ifr = document.getElementById('iframe-player');
   vid.style.display = 'none'; vid.src = '';
   ifr.src = url; ifr.style.display = 'block';
   document.getElementById('vph').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'none';
-  const notes = { youtube:'▶ YouTube — управляйте плеером напрямую', vk:'▶ VK Видео — нажмите Play', kinopoisk:'🎬 Кинопоиск — нужна подписка' };
+  const notes = { vk:'▶ VK Видео — нажмите Play', kinopoisk:'🎬 Кинопоиск — нужна подписка' };
   const n = document.getElementById('iframe-note');
   n.textContent = notes[srcType] || ''; n.style.display = notes[srcType] ? 'block' : 'none';
   const nm = label + ': ' + (orig && orig.length > 38 ? orig.slice(0,38)+'...' : (orig||''));
   playlist.push({ n:nm, url, orig:orig||'', srcType, isEmbed:true }); renderPL();
   sysmsg('🎬 ' + label + ' загружен!');
-  currentSrc = srcType || 'youtube';
+  currentSrc = srcType || 'vk';
 }
 
 function loadVideoSrc(src, name, save) {
+  // Скрываем YT
+  document.getElementById('yt-wrap').style.display = 'none';
+  document.getElementById('guest-overlay').style.display = 'none';
+  stopYTProgress();
+
   const ifr = document.getElementById('iframe-player');
   ifr.src = ''; ifr.style.display = 'none';
   vid.style.display = 'block'; vid.src = src; vid.load();
@@ -1171,7 +1422,7 @@ function demo(k) {
     yt:  ['https://www.youtube.com/watch?v=dQw4w9WgXcQ','YouTube демо','youtube']
   };
   const d = map[k]; if (!d) return;
-  if (d[2] === 'youtube') { setSrc('youtube'); document.getElementById('vurl').value = d[0]; loadUrl(); }
+  if (d[2] === 'youtube') { const id = ytId(d[0]); if(id){ loadYouTube(id, d[0]); sendSync({ type:'load-yt', videoId:id, orig:d[0] }); } }
   else { loadVideoSrc(d[0], d[1], true); sendSync({ type:'load-mp4', src:d[0], name:d[1] }); }
 }
 
@@ -1183,7 +1434,7 @@ function renderPL() {
     d.innerHTML = '<span class="pl-ico">'+(ico[item.srcType]||'🎬')+'</span>'
       +'<span class="pl-name">'+item.n+'</span>'
       +'<span class="pl-del" onclick="delPL('+i+',event)">✕</span>';
-    d.onclick = () => item.isEmbed ? loadIframe(item.url, item.n.split(':')[0], item.orig||'', item.srcType) : loadVideoSrc(item.src, item.n, false);
+    d.onclick = () => item.isYT ? loadYouTube(item.videoId, item.orig) : (item.isEmbed ? loadIframe(item.url, item.n.split(':')[0], item.orig||'', item.srcType) : loadVideoSrc(item.src, item.n, false));
     el.appendChild(d);
   });
 }
