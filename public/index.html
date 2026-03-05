@@ -1096,71 +1096,12 @@ function handleSync(msg) {
       syncLock = true; vid.currentTime = msg.t; showSyncInd();
       setTimeout(() => syncLock = false, 400); break;
 
-    // ── YouTube: хост рассылает состояние гостю
+    // ── YouTube: симметричная синхронизация, работает у обоих
     case 'load-yt':
       loadYouTube(msg.videoId, msg.orig); break;
 
-    case 'yt-play':
-      ytState = 1; // PLAYING
-      ytDuration = msg.d || ytDuration;
-      updateYTProgress(msg.t, ytDuration);
-      showSyncInd();
-      // Запускаем прогресс-бар у гостя без реального плеера
-      if (!isHost) {
-        let _t = msg.t, _start = Date.now();
-        stopYTProgress();
-        ytProgressTimer = setInterval(() => {
-          const elapsed = (Date.now() - _start) / 1000;
-          updateYTProgress(_t + elapsed, ytDuration);
-        }, 500);
-      }
-      break;
-
-    case 'yt-pause':
-      ytState = 2; // PAUSED
-      stopYTProgress();
-      updateYTProgress(msg.t, ytDuration);
-      showSyncInd();
-      break;
-
-    case 'yt-seek':
-      if (!isHost) {
-        // Перезапускаем прогресс с новой позиции
-        const wasPlaying = ytState === 1;
-        stopYTProgress();
-        updateYTProgress(msg.t, ytDuration);
-        if (wasPlaying) {
-          let _t = msg.t, _start = Date.now();
-          ytProgressTimer = setInterval(() => {
-            updateYTProgress(_t + (Date.now()-_start)/1000, ytDuration);
-          }, 500);
-        }
-      }
-      showSyncInd();
-      break;
-
-    case 'yt-tick':
-      // Коррекция рассинхронизации (каждые 5 сек от хоста)
-      if (!isHost) {
-        ytDuration = msg.d || ytDuration;
-        stopYTProgress();
-        let _t = msg.t, _start = Date.now();
-        ytProgressTimer = setInterval(() => {
-          updateYTProgress(_t + (Date.now()-_start)/1000, ytDuration);
-        }, 500);
-      }
-      break;
-
-    // ── Команды от гостя → выполняет хост
-    case 'yt-cmd-play':
-      if (isHost && ytPlayer) { ytPlayer.playVideo(); }
-      break;
-    case 'yt-cmd-pause':
-      if (isHost && ytPlayer) { ytPlayer.pauseVideo(); }
-      break;
-    case 'yt-cmd-seek':
-      if (isHost && ytPlayer) { ytPlayer.seekTo(msg.t, true); sendSync({ type:'yt-seek', t:msg.t }); }
-      break;
+    case 'yt-state':
+      handleYTState(msg); break;
 
     case 'load-mp4':   loadVideoSrc(msg.src, msg.name, false); break;
     case 'load-embed': loadIframe(msg.url, msg.label, msg.orig, msg.src_type); break;
@@ -1237,33 +1178,34 @@ function kpEmbed(u) {
 }
 
 // ── YOUTUBE IFRAME API ─────────────────────────────
-let ytPlayer = null;       // YT.Player instance
-let ytReady = false;       // API loaded
-let ytPendingId = null;    // video to load when API ready
-let ytState = -1;          // last known player state
+// Модель: оба держат реальный YT плеер.
+// Любой нажимает — команда летит ОБОИМ через sendYTCommand.
+// syncLockYT блокирует эхо-реакцию на собственные действия.
+
+let ytPlayer = null;
+let ytReady = false;
+let ytPendingId = null;
+let ytState = -1;
 let ytDuration = 0;
 let ytProgressTimer = null;
+let syncLockYT = false;  // блокирует реакцию на входящий sync пока выполняем
+let lastSyncTime = 0;    // throttle исходящих событий
 
-// Called by YouTube IFrame API when ready
 window.onYouTubeIframeAPIReady = function() {
   ytReady = true;
   if (ytPendingId) { _createYTPlayer(ytPendingId); ytPendingId = null; }
 };
 
 function loadYouTube(videoId, orig) {
-  // Hide other players
   vid.style.display = 'none'; vid.src = '';
   document.getElementById('iframe-player').style.display = 'none';
   document.getElementById('vph').style.display = 'none';
   document.getElementById('vcontrols').style.display = 'none';
   document.getElementById('iframe-note').style.display = 'none';
   document.getElementById('yt-wrap').style.display = 'block';
-
-  // Гость видит только overlay, не управляет плеером напрямую
-  updateGuestOverlay();
+  document.getElementById('guest-overlay').style.display = 'flex';
 
   const nm = 'YouTube: ' + (orig && orig.length > 38 ? orig.slice(0,38)+'...' : (orig||videoId));
-  // avoid duplicate playlist entries
   if (!playlist.find(p => p.videoId === videoId)) {
     playlist.push({ n:nm, videoId, orig:orig||'', srcType:'youtube', isYT:true }); renderPL();
   }
@@ -1271,105 +1213,169 @@ function loadYouTube(videoId, orig) {
   currentSrc = 'youtube';
 
   if (!ytReady) { ytPendingId = videoId; return; }
-  if (ytPlayer) {
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    syncLockYT = true;
     ytPlayer.loadVideoById(videoId);
+    setTimeout(() => syncLockYT = false, 1500);
   } else {
     _createYTPlayer(videoId);
   }
 }
 
 function _createYTPlayer(videoId) {
-  // Reset div (API replaces it)
-  document.getElementById('yt-player').innerHTML = '';
+  const div = document.getElementById('yt-player');
+  div.innerHTML = '';
   ytPlayer = new YT.Player('yt-player', {
     videoId,
-    playerVars: { autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+    playerVars: {
+      autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1,
+      enablejsapi: 1, origin: location.origin
+    },
     events: {
-      onReady: (e) => { if (isHost) e.target.playVideo(); },
+      onReady:       onYTReady,
       onStateChange: onYTStateChange
     }
   });
 }
 
-function onYTStateChange(e) {
-  if (!isHost) return; // только хост рассылает события
-  const s = e.data;
-  const t = ytPlayer ? ytPlayer.getCurrentTime() : 0;
-  ytDuration = ytPlayer ? ytPlayer.getDuration() : 0;
+function onYTReady(e) {
+  ytDuration = e.target.getDuration();
+  startYTProgress();
+}
 
-  if (s === YT.PlayerState.PLAYING && ytState !== YT.PlayerState.PLAYING) {
-    sendSync({ type:'yt-play', t });
+function onYTStateChange(e) {
+  if (syncLockYT) return;  // не реагируем на изменения которые сами вызвали
+
+  const s = e.data;
+  const now = Date.now();
+  const t = ytPlayer.getCurrentTime();
+  ytDuration = ytPlayer.getDuration();
+
+  // Throttle: не спамим события чаще раза в 300мс
+  if (now - lastSyncTime < 300 && s === ytState) return;
+  lastSyncTime = now;
+
+  if (s === YT.PlayerState.PLAYING) {
+    ytState = s;
+    // Отправляем обоим: play + текущее время + timestamp для компенсации лага
+    sendYTCommand({ type: 'yt-state', action: 'play', t, ts: now });
     startYTProgress();
-  } else if (s === YT.PlayerState.PAUSED && ytState !== YT.PlayerState.PAUSED) {
-    sendSync({ type:'yt-pause', t });
+    updateOverlayBtn(true);
+  } else if (s === YT.PlayerState.PAUSED) {
+    ytState = s;
+    sendYTCommand({ type: 'yt-state', action: 'pause', t, ts: now });
     stopYTProgress();
+    updateOverlayBtn(false);
   } else if (s === YT.PlayerState.ENDED) {
-    sendSync({ type:'yt-pause', t });
+    ytState = s;
+    sendYTCommand({ type: 'yt-state', action: 'pause', t, ts: now });
     stopYTProgress();
+    updateOverlayBtn(false);
   }
-  ytState = s;
-  updateGuestOverlay();
+}
+
+// Отправляет команду СЕБЕ (через handleYTState) и партнёру (через sendSync)
+function sendYTCommand(payload) {
+  sendSync(payload);
+  // Применяем локально тоже — но только если мы инициатор (не из handleSync)
+}
+
+function handleYTState(msg) {
+  // Компенсация сетевого лага: сдвигаем время на задержку доставки
+  const lag = (Date.now() - msg.ts) / 1000;  // секунды
+  const targetTime = msg.t + (msg.action === 'play' ? lag : 0);
+
+  syncLockYT = true;
+  setTimeout(() => syncLockYT = false, 800);
+
+  if (msg.action === 'play') {
+    ytState = YT.PlayerState.PLAYING;
+    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+      ytPlayer.seekTo(targetTime, true);
+      ytPlayer.playVideo();
+    }
+    startYTProgress();
+    updateOverlayBtn(true);
+  } else if (msg.action === 'pause') {
+    ytState = YT.PlayerState.PAUSED;
+    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+      ytPlayer.seekTo(msg.t, true);
+      ytPlayer.pauseVideo();
+    }
+    stopYTProgress();
+    updateOverlayBtn(false);
+    updateYTProgress(msg.t, ytDuration);
+  } else if (msg.action === 'seek') {
+    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+      ytPlayer.seekTo(targetTime, true);
+      if (ytState === YT.PlayerState.PLAYING) ytPlayer.playVideo();
+    }
+    updateYTProgress(targetTime, ytDuration);
+  }
+  showSyncInd();
+}
+
+// Кнопка play/pause на overlay — одинаково для хоста и гостя
+function guestTogglePlay() {
+  if (!ytPlayer) return;
+  const t = typeof ytPlayer.getCurrentTime === 'function' ? ytPlayer.getCurrentTime() : 0;
+  const playing = ytState === YT.PlayerState.PLAYING;
+  // Применяем локально немедленно
+  syncLockYT = true;
+  setTimeout(() => syncLockYT = false, 800);
+  if (playing) {
+    ytPlayer.pauseVideo();
+    ytState = YT.PlayerState.PAUSED;
+    stopYTProgress();
+    updateOverlayBtn(false);
+    sendSync({ type:'yt-state', action:'pause', t, ts: Date.now() });
+  } else {
+    ytPlayer.playVideo();
+    ytState = YT.PlayerState.PLAYING;
+    startYTProgress();
+    updateOverlayBtn(true);
+    sendSync({ type:'yt-state', action:'play', t, ts: Date.now() });
+  }
+}
+
+function guestSeek(e) {
+  if (!ytPlayer) return;
+  const bar = document.getElementById('go-progress');
+  const r = bar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  const t = pct * ytDuration;
+  syncLockYT = true;
+  setTimeout(() => syncLockYT = false, 800);
+  ytPlayer.seekTo(t, true);
+  if (ytState === YT.PlayerState.PLAYING) ytPlayer.playVideo();
+  updateYTProgress(t, ytDuration);
+  sendSync({ type:'yt-state', action:'seek', t, ts: Date.now() });
 }
 
 function startYTProgress() {
   stopYTProgress();
   ytProgressTimer = setInterval(() => {
-    if (!ytPlayer) return;
+    if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
     const t = ytPlayer.getCurrentTime();
-    ytDuration = ytPlayer.getDuration();
-    // Периодически синкаем время (каждые 5 сек)
-    if (isHost && Math.round(t) % 5 === 0 && ytState === YT.PlayerState.PLAYING) {
-      sendSync({ type:'yt-tick', t, d:ytDuration });
-    }
+    ytDuration = ytPlayer.getDuration() || ytDuration;
     updateYTProgress(t, ytDuration);
-  }, 500);
+  }, 250);
 }
-function stopYTProgress() { clearInterval(ytProgressTimer); }
+function stopYTProgress() { clearInterval(ytProgressTimer); ytProgressTimer = null; }
 
 function updateYTProgress(t, d) {
   document.getElementById('go-fill').style.width = d ? (t/d*100)+'%' : '0%';
   document.getElementById('go-time').textContent = fmt(t) + ' / ' + fmt(d);
-  document.getElementById('go-playpause').textContent =
-    (ytState === YT.PlayerState.PLAYING) ? '⏸' : '▶';
+}
+
+function updateOverlayBtn(playing) {
+  document.getElementById('go-playpause').textContent = playing ? '⏸' : '▶';
 }
 
 function updateGuestOverlay() {
   const wrap = document.getElementById('yt-wrap');
-  const overlay = document.getElementById('guest-overlay');
-  if (wrap.style.display !== 'none') {
-    // Overlay показываем всем (и хосту для перемотки тоже)
-    overlay.style.display = 'flex';
-  } else {
-    overlay.style.display = 'none';
-  }
-}
-
-// Гость нажимает play/pause → отправляет команду хосту
-function guestTogglePlay() {
-  if (isHost) {
-    // Хост управляет напрямую
-    if (ytPlayer) {
-      if (ytState === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
-      else ytPlayer.playVideo();
-    }
-  } else {
-    // Гость отправляет команду хосту
-    const cmd = (document.getElementById('go-playpause').textContent === '⏸') ? 'yt-cmd-pause' : 'yt-cmd-play';
-    sendSync({ type: cmd });
-  }
-}
-
-function guestSeek(e) {
-  const bar = document.getElementById('go-progress');
-  const r = bar.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-  const t = pct * ytDuration;
-  if (isHost) {
-    if (ytPlayer) ytPlayer.seekTo(t, true);
-    sendSync({ type:'yt-seek', t });
-  } else {
-    sendSync({ type:'yt-cmd-seek', t });
-  }
+  document.getElementById('guest-overlay').style.display =
+    wrap.style.display !== 'none' ? 'flex' : 'none';
 }
 
 function loadIframe(url, label, orig, srcType) {
