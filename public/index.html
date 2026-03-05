@@ -387,13 +387,92 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(185,138,255,.18);border-radius:2px}
 
+/* ─── Peer volume control ─── */
+.peer-vol{
+  position:absolute;bottom:5px;right:28px;
+  display:flex;align-items:center;gap:5px;
+  background:rgba(0,0,0,.6);padding:3px 7px;border-radius:20px;
+  opacity:0;transition:opacity .2s;z-index:52}
+.peer-wrap:hover .peer-vol{opacity:1}
+.peer-vol-icon{font-size:.75rem;cursor:pointer;user-select:none}
+.peer-vol-sl{
+  -webkit-appearance:none;width:52px;height:3px;
+  background:rgba(255,255,255,.3);border-radius:2px;outline:none;cursor:pointer}
+.peer-vol-sl::-webkit-slider-thumb{
+  -webkit-appearance:none;width:10px;height:10px;
+  background:var(--acc);border-radius:50%}
+
+/* ─── My mic gain ─── */
+.my-vol-wrap{
+  position:absolute;bottom:5px;right:7px;
+  display:flex;align-items:center;gap:4px;
+  background:rgba(0,0,0,.6);padding:3px 7px;border-radius:20px;
+  opacity:0;transition:opacity .2s}
+.my-wrap:hover .my-vol-wrap{opacity:1}
+.my-mic-sl{
+  -webkit-appearance:none;width:44px;height:3px;
+  background:rgba(255,255,255,.3);border-radius:2px;outline:none;cursor:pointer}
+.my-mic-sl::-webkit-slider-thumb{
+  -webkit-appearance:none;width:10px;height:10px;
+  background:var(--acc3);border-radius:50%}
+
 /* ─── Responsive ─── */
 @media(max-width:768px){
-  .sidebar{width:100%;height:38vh;border-left:none;border-top:1px solid var(--border)}
-  #room{flex-direction:column}
-  .main{flex-direction:column}
-  .feat-row{gap:10px}
-  .feat{width:150px}
+  body{overflow:auto}
+  #room{height:100dvh;flex-direction:column}
+  .main{flex-direction:column;flex:1;min-height:0}
+
+  /* Видео занимает ~55% экрана */
+  .vwrap{flex:none;height:55dvh;min-height:200px}
+
+  /* Sidebar снизу как панель */
+  .sidebar{
+    width:100%;flex:1;min-height:0;
+    border-left:none;border-top:1px solid var(--border)}
+
+  /* Peer/My камеры меньше на мобиле */
+  .peer-wrap{width:110px;height:78px;bottom:70px;right:8px}
+  .my-wrap{width:88px;height:60px;bottom:70px;left:8px}
+
+  /* Показываем громкость всегда на мобиле */
+  .peer-vol,.my-vol-wrap{opacity:1}
+  .peer-vol-sl{width:44px}
+  .my-mic-sl{width:36px}
+
+  /* Callbar компактнее */
+  .callbar{height:52px;gap:7px;padding:0 8px}
+  .icon-btn{width:38px;height:38px}
+
+  /* Topbar */
+  .topbar{padding:0 10px;gap:8px}
+  .topbar-logo{font-size:.85rem}
+
+  /* Контролы видео адаптируем */
+  .vcontrols{
+    padding:7px 8px;gap:6px;border-radius:12px;
+    max-width:calc(100vw - 20px)}
+  .prog-wrap{min-width:60px}
+  .vol-wrap .vol-sl{width:50px}
+  .react-row{gap:3px}
+  .rbtn{padding:4px 6px}
+  .vdiv{display:none}
+
+  /* Landing */
+  .feat-row{gap:8px}
+  .feat{width:calc(50% - 8px);max-width:160px}
+  .land-btns{flex-direction:column;align-items:center}
+  .btn{width:220px;text-align:center}
+  .join-row{flex-direction:column;align-items:center}
+  .join-row .input{width:220px}
+
+  /* Tabs текст меньше */
+  .stab{font-size:.68rem;padding:11px 4px}
+}
+
+@media(max-width:400px){
+  .feat{width:calc(50% - 6px)}
+  .peer-wrap{width:90px;height:64px}
+  .my-wrap{width:74px;height:52px}
 }
 </style>
 </head>
@@ -472,6 +551,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
           <div class="peer-nocam" id="peer-nocam"><div class="av">👤</div><span>Нет камеры</span></div>
         </div>
         <div class="peer-lbl">Партнёр</div>
+        <div class="peer-vol" id="peer-vol-wrap">
+          <span class="peer-vol-icon" onclick="togglePeerMute()">🔊</span>
+          <input type="range" class="peer-vol-sl" id="peer-vol-sl" min="0" max="1" step="0.05" value="1" oninput="setPeerVol(this.value)">
+        </div>
         <div class="peer-resize" id="peer-resize">⤡</div>
       </div>
 
@@ -479,6 +562,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
       <div class="my-wrap">
         <video id="my-video" autoplay playsinline muted></video>
         <div class="my-lbl">Вы</div>
+        <div class="my-vol-wrap">
+          <input type="range" class="my-mic-sl" id="my-mic-sl" min="0" max="1" step="0.05" value="1" oninput="setMyMicGain(this.value)" title="Громкость микрофона">
+          <span style="font-size:.6rem;color:var(--muted)">🎙</span>
+        </div>
       </div>
 
       <!-- Controls (mp4 only) -->
@@ -902,13 +989,35 @@ async function startPeerConnection(makeOffer) {
   }
 
   // Получаем стрим партнёра
+  // Используем Map чтобы собрать все треки в один стрим
+  let _peerStream = null;
   pc.ontrack = (e) => {
     log('ontrack: ' + e.track.kind + ', streams: ' + e.streams.length);
+
+    // Вариант 1: пришёл готовый стрим
     if (e.streams && e.streams[0]) {
-      peerV.srcObject = e.streams[0];
-      peerV.play().catch(err => log('peerV.play error: ' + err));
-      document.getElementById('peer-nocam').style.display = 'none';
+      _peerStream = e.streams[0];
+    } else {
+      // Вариант 2: трек без стрима — собираем вручную
+      if (!_peerStream) _peerStream = new MediaStream();
+      _peerStream.addTrack(e.track);
     }
+
+    peerV.srcObject = _peerStream;
+    document.getElementById('peer-nocam').style.display = 'none';
+
+    // play() иногда фейлит до того как треки ready — повторяем
+    const tryPlay = () => peerV.play().catch(err => {
+      log('peerV.play retry: ' + err.message);
+      setTimeout(tryPlay, 500);
+    });
+    tryPlay();
+
+    // Если видео-трек есть — скрываем заглушку окончательно
+    e.track.onunmute = () => {
+      document.getElementById('peer-nocam').style.display = 'none';
+      peerV.play().catch(() => {});
+    };
   };
 
   // ICE кандидаты
@@ -1178,7 +1287,54 @@ function seekClick(e) {
   vid.currentTime = t; sendSync({ type:'seek', t });
 }
 function setVol(v)    { vid.volume = parseFloat(v); }
-function toggleMute() { isMuted=!isMuted; vid.muted=isMuted; document.getElementById('vol-icon').textContent = isMuted?'🔇':'🔊'; }
+// ══════════ VOLUME CONTROLS ══════════
+
+let peerMuted = false;
+let micGainNode = null;
+let audioCtx = null;
+
+function setPeerVol(v) {
+  peerV.volume = parseFloat(v);
+  peerMuted = (parseFloat(v) === 0);
+  document.querySelector('.peer-vol-icon').textContent = peerMuted ? '🔇' : '🔊';
+}
+
+function togglePeerMute() {
+  peerMuted = !peerMuted;
+  peerV.volume = peerMuted ? 0 : parseFloat(document.getElementById('peer-vol-sl').value) || 1;
+  document.getElementById('peer-vol-sl').value = peerV.volume;
+  document.querySelector('.peer-vol-icon').textContent = peerMuted ? '🔇' : '🔊';
+  toast(peerMuted ? '🔇 Партнёр приглушён' : '🔊 Партнёр слышен');
+}
+
+function setMyMicGain(v) {
+  // Если Web Audio API доступен — регулируем громкость микрофона
+  if (!localStream) return;
+  const val = parseFloat(v);
+  if (!audioCtx) {
+    try {
+      audioCtx = new AudioContext();
+      const src = audioCtx.createMediaStreamSource(localStream);
+      micGainNode = audioCtx.createGain();
+      const dst = audioCtx.createMediaStreamDestination();
+      src.connect(micGainNode);
+      micGainNode.connect(dst);
+      // Заменяем аудио-трек в localStream и в PeerConnection
+      const newTrack = dst.stream.getAudioTracks()[0];
+      if (pc) {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+        if (sender) sender.replaceTrack(newTrack).catch(e => log('replaceTrack: ' + e));
+      }
+    } catch(e) { log('AudioCtx error: ' + e); return; }
+  }
+  if (micGainNode) micGainNode.gain.value = val;
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  vid.muted = isMuted;
+  document.getElementById('vol-icon').textContent = isMuted ? '🔇' : '🔊';
+}
 function toggleFS()   { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('vwrap').requestFullscreen(); }
 function fmt(s)       { if(!s||isNaN(s)) return '0:00'; return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); }
 function showSyncInd(){ const el=document.getElementById('sync-ind'); el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),1600); }
@@ -1254,8 +1410,10 @@ function floatReact(e){
 (function(){
   const wrap=document.getElementById('peer-wrap'), rh=document.getElementById('peer-resize');
   let drag=false,resize=false,sx,sy,sl,st,sw,sh;
+
+  // Mouse events
   wrap.addEventListener('mousedown',e=>{
-    if(e.target===rh||e.target.closest('.peer-resize'))return;
+    if(e.target===rh||e.target.closest('.peer-resize')||e.target.closest('.peer-vol'))return;
     drag=true;sx=e.clientX;sy=e.clientY;sl=wrap.offsetLeft;st=wrap.offsetTop;e.preventDefault();
   });
   rh.addEventListener('mousedown',e=>{
@@ -1270,11 +1428,28 @@ function floatReact(e){
       wrap.style.right='auto';wrap.style.bottom='auto';
     }
     if(resize){
-      wrap.style.width=Math.max(120,Math.min(480,sw+e.clientX-sx))+'px';
-      wrap.style.height=Math.max(80,Math.min(360,sh+e.clientY-sy))+'px';
+      wrap.style.width=Math.max(80,Math.min(480,sw+e.clientX-sx))+'px';
+      wrap.style.height=Math.max(60,Math.min(360,sh+e.clientY-sy))+'px';
     }
   });
   document.addEventListener('mouseup',()=>{drag=false;resize=false;});
+
+  // Touch events (mobile drag)
+  wrap.addEventListener('touchstart',e=>{
+    if(e.target.closest('.peer-vol')||e.target.closest('.peer-resize'))return;
+    const t=e.touches[0];
+    drag=true;sx=t.clientX;sy=t.clientY;sl=wrap.offsetLeft;st=wrap.offsetTop;
+  },{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    if(!drag)return;
+    const t=e.touches[0];
+    const vw=document.getElementById('vwrap');
+    wrap.style.left=Math.max(0,Math.min(vw.offsetWidth-wrap.offsetWidth,sl+t.clientX-sx))+'px';
+    wrap.style.top=Math.max(0,Math.min(vw.offsetHeight-wrap.offsetHeight,st+t.clientY-sy))+'px';
+    wrap.style.right='auto';wrap.style.bottom='auto';
+    e.preventDefault();
+  },{passive:false});
+  wrap.addEventListener('touchend',()=>{drag=false;});
 })();
 
 // ══════════ UI ══════════
