@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════
-//  CinemaSync — сервер с поддержкой переподключения
+//  CinemaSync — сервер до 8 участников
 // ═══════════════════════════════════════════
 
 const http  = require('http');
@@ -9,12 +9,18 @@ const { WebSocketServer } = require('ws');
 
 const PORT          = process.env.PORT || 3000;
 const PING_INTERVAL = 25000;
-const ROOM_TTL      = 10 * 60 * 1000; // комната живёт 10 минут после ухода хоста
+const ROOM_TTL      = 10 * 60 * 1000;
+const MAX_PEERS     = 8;
 
 const rooms = {};
-// rooms[id] = { host: ws|null, guest: ws|null, hostSecret: str, state: {...}, expireTimer: null }
+// rooms[id] = {
+//   peers: { [peerId]: { ws, name, color, isHost } },
+//   hostId: string | null,
+//   hostSecret: string | null,
+//   state: any,
+//   expireTimer: null
+// }
 
-// ── HTTP
 const httpServer = http.createServer((req, res) => {
   let filePath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
   const fullPath = path.join(__dirname, 'public', filePath);
@@ -40,11 +46,8 @@ function send(ws, data) {
 }
 
 function getOrCreateRoom(id) {
-  if (!rooms[id]) rooms[id] = { host: null, guest: null, hostSecret: null, state: null, expireTimer: null };
-  if (rooms[id].expireTimer) {
-    clearTimeout(rooms[id].expireTimer);
-    rooms[id].expireTimer = null;
-  }
+  if (!rooms[id]) rooms[id] = { peers: {}, hostId: null, hostSecret: null, state: null, expireTimer: null };
+  if (rooms[id].expireTimer) { clearTimeout(rooms[id].expireTimer); rooms[id].expireTimer = null; }
   return rooms[id];
 }
 
@@ -53,17 +56,33 @@ function scheduleRoomExpiry(id) {
   if (!room) return;
   if (room.expireTimer) clearTimeout(room.expireTimer);
   room.expireTimer = setTimeout(() => {
-    if (!room.host && !room.guest) {
+    if (Object.keys(room.peers).length === 0) {
       delete rooms[id];
       console.log(`[~] Room ${id} expired`);
     }
   }, ROOM_TTL);
 }
 
+// Отправить всем в комнате, кроме excluded peerId
+function broadcast(roomId, data, excludePeerId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  Object.entries(room.peers).forEach(([pid, p]) => {
+    if (pid !== excludePeerId) send(p.ws, data);
+  });
+}
+
+// Список пиров для отправки новому участнику
+function peerList(room, excludeId) {
+  return Object.entries(room.peers)
+    .filter(([id]) => id !== excludeId)
+    .map(([id, p]) => ({ id, name: p.name, color: p.color, isHost: p.isHost }));
+}
+
 wss.on('connection', (ws) => {
-  ws._roomId = null;
-  ws._role   = null;
-  ws._alive  = true;
+  ws._roomId  = null;
+  ws._peerId  = null;
+  ws._alive   = true;
 
   ws._pingTimer = setInterval(() => {
     if (!ws._alive) { ws.terminate(); return; }
@@ -78,98 +97,139 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
 
+      // ── СОЗДАТЬ КОМНАТУ (стать хостом) ──────────────────────────
       case 'create': {
-        const id = msg.roomId.toUpperCase();
+        const id     = (msg.roomId || '').toUpperCase();
         const secret = msg.secret || '';
-        const room = getOrCreateRoom(id);
+        const name   = msg.name   || 'Хост';
+        const color  = msg.color  || '#60a5fa';
+        const room   = getOrCreateRoom(id);
 
-        // Если комната уже существует и у неё есть секрет — проверяем
         if (room.hostSecret && room.hostSecret !== secret) {
-          send(ws, { type: 'error', msg: 'Комната уже занята' });
-          return;
+          send(ws, { type: 'error', msg: 'Комната уже занята' }); return;
         }
 
-        // Закрываем старое соединение хоста если есть
-        if (room.host && room.host !== ws) {
-          try { room.host.terminate(); } catch(e) {}
+        // Если уже был хост — выгоняем
+        if (room.hostId && room.peers[room.hostId] && room.peers[room.hostId].ws !== ws) {
+          try { room.peers[room.hostId].ws.terminate(); } catch(e) {}
+          delete room.peers[room.hostId];
         }
 
-        room.host = ws;
+        const peerId = msg.peerId || `h_${Math.random().toString(36).slice(2,8)}`;
         room.hostSecret = secret || room.hostSecret || Math.random().toString(36).slice(2);
-        ws._roomId = id; ws._role = 'host';
+        room.hostId     = peerId;
+        room.peers[peerId] = { ws, name, color, isHost: true };
+        ws._roomId = id; ws._peerId = peerId;
 
-        send(ws, { type: 'created', roomId: id, state: room.state, secret: room.hostSecret });
+        send(ws, { type: 'created', roomId: id, peerId, secret: room.hostSecret, state: room.state, peers: peerList(room, peerId) });
 
-        if (room.guest && room.guest.readyState === 1) {
-          send(room.guest, { type: 'host-reconnected' });
-          send(ws, { type: 'guest-joined' });
-        }
-        console.log(`[+] Room ${id} host connected`);
+        // Оповестить всех остальных о новом хосте
+        broadcast(id, { type: 'peer-joined', id: peerId, name, color, isHost: true }, peerId);
+        console.log(`[+] Room ${id}: host "${name}" (${peerId})`);
         break;
       }
 
+      // ── ВОЙТИ В КОМНАТУ ──────────────────────────────────────────
       case 'join': {
-        const id = msg.roomId.toUpperCase();
-        const room = getOrCreateRoom(id);
+        const id    = (msg.roomId || '').toUpperCase();
+        const name  = msg.name  || 'Участник';
+        const color = msg.color || '#a78bfa';
+        const room  = getOrCreateRoom(id);
 
-        // Попытка переподключиться как хост с секретом
+        // Переподключение хоста по секрету
         if (msg.secret && room.hostSecret && msg.secret === room.hostSecret) {
-          if (room.host && room.host !== ws) {
-            try { room.host.terminate(); } catch(e) {}
+          const peerId = msg.peerId || room.hostId || `h_${Math.random().toString(36).slice(2,8)}`;
+          if (room.hostId && room.peers[room.hostId] && room.peers[room.hostId].ws !== ws) {
+            try { room.peers[room.hostId].ws.terminate(); } catch(e) {}
+            delete room.peers[room.hostId];
           }
-          room.host = ws;
-          ws._roomId = id; ws._role = 'host';
-          send(ws, { type: 'created', roomId: id, state: room.state, secret: room.hostSecret, reclaimed: true });
-          if (room.guest && room.guest.readyState === 1) {
-            send(room.guest, { type: 'host-reconnected' });
-            send(ws, { type: 'guest-joined' });
-          }
-          console.log(`[+] Room ${id}: host reclaimed`);
+          room.hostId = peerId;
+          room.peers[peerId] = { ws, name, color, isHost: true };
+          ws._roomId = id; ws._peerId = peerId;
+          send(ws, { type: 'created', roomId: id, peerId, secret: room.hostSecret, state: room.state, reclaimed: true, peers: peerList(room, peerId) });
+          broadcast(id, { type: 'peer-joined', id: peerId, name, color, isHost: true }, peerId);
+          console.log(`[+] Room ${id}: host reclaimed by "${name}"`);
           return;
         }
 
-        if (!room.host || room.host.readyState !== 1) {
-          room.guest = ws;
-          ws._roomId = id; ws._role = 'guest';
-          send(ws, { type: 'waiting-for-host', roomId: id });
-          console.log(`[~] Room ${id}: guest waiting for host`);
+        // Комната переполнена
+        if (Object.keys(room.peers).length >= MAX_PEERS) {
+          send(ws, { type: 'error', msg: `Комната заполнена (макс. ${MAX_PEERS})` }); return;
+        }
+
+        // Нет хоста — ждём
+        if (!room.hostId || !room.peers[room.hostId] || room.peers[room.hostId].ws.readyState !== 1) {
+          // Ставим временную запись, чтобы не потерять гостя
+          const peerId = msg.peerId || `g_${Math.random().toString(36).slice(2,8)}`;
+          room.peers[peerId] = { ws, name, color, isHost: false };
+          ws._roomId = id; ws._peerId = peerId;
+          send(ws, { type: 'waiting-for-host', roomId: id, peerId });
+          console.log(`[~] Room ${id}: "${name}" waiting for host`);
           return;
         }
 
-        // Закрываем старого гостя
-        if (room.guest && room.guest !== ws && room.guest.readyState === 1) {
-          try { room.guest.terminate(); } catch(e) {}
-        }
+        const peerId = msg.peerId || `g_${Math.random().toString(36).slice(2,8)}`;
+        room.peers[peerId] = { ws, name, color, isHost: false };
+        ws._roomId = id; ws._peerId = peerId;
 
-        room.guest = ws;
-        ws._roomId = id; ws._role = 'guest';
-        send(room.host, { type: 'guest-joined' });
-        send(ws, { type: 'joined', roomId: id, state: room.state });
-        console.log(`[+] Room ${id}: guest joined`);
+        // Новому гостю — список всех текущих пиров + состояние комнаты
+        send(ws, { type: 'joined', roomId: id, peerId, state: room.state, peers: peerList(room, peerId) });
+
+        // Всем остальным — новый пир
+        broadcast(id, { type: 'peer-joined', id: peerId, name, color, isHost: false }, peerId);
+
+        console.log(`[+] Room ${id}: "${name}" joined (${peerId}), total: ${Object.keys(room.peers).length}`);
         break;
       }
 
+      // ── СОХРАНИТЬ СОСТОЯНИЕ ВИДЕО ────────────────────────────────
       case 'save-state': {
         const room = rooms[ws._roomId];
-        if (room && ws._role === 'host') room.state = msg.state;
+        if (room && room.hostId === ws._peerId) room.state = msg.state;
         break;
       }
 
+      // ── WebRTC СИГНАЛИНГ (адресный) ──────────────────────────────
+      // Клиент указывает msg.to = peerId получателя
       case 'offer':
       case 'answer':
       case 'ice': {
         const room = rooms[ws._roomId]; if (!room) return;
-        const target = ws._role === 'host' ? room.guest : room.host;
-        send(target, msg);
+        const target = room.peers[msg.to];
+        if (target) send(target.ws, { ...msg, from: ws._peerId });
         break;
       }
 
-      case 'sync':
+      // ── СИНХРОНИЗАЦИЯ ВИДЕО (от хоста всем / relay) ─────────────
+      case 'sync': {
+        const room = rooms[ws._roomId]; if (!room) return;
+        // Только хост может слать sync
+        if (ws._peerId === room.hostId) {
+          broadcast(ws._roomId, { type: 'sync', payload: msg.payload }, ws._peerId);
+        }
+        break;
+      }
+
+      // ── ЧАТ (от любого — всем остальным) ────────────────────────
+      case 'chat': {
+        const room = rooms[ws._roomId]; if (!room) return;
+        broadcast(ws._roomId, { type: 'chat', text: msg.text, name: msg.name, color: msg.color, from: ws._peerId }, ws._peerId);
+        break;
+      }
+
+      // ── РЕАКЦИЯ (от любого — всем остальным) ────────────────────
+      case 'react': {
+        const room = rooms[ws._roomId]; if (!room) return;
+        broadcast(ws._roomId, { type: 'react', e: msg.e }, ws._peerId);
+        break;
+      }
+
+      // ── RELAY-MODE (фоллбэк без WebRTC) ─────────────────────────
       case 'relay-mode': {
         const room = rooms[ws._roomId]; if (!room) return;
-        const target = ws._role === 'host' ? room.guest : room.host;
-        send(target, msg);
-        if (msg.type === 'relay-mode') console.log(`[~] Room ${ws._roomId} -> relay mode`);
+        const target = room.peers[msg.to];
+        if (target) send(target.ws, { ...msg, from: ws._peerId });
+        console.log(`[~] Room ${ws._roomId} relay-mode`);
         break;
       }
     }
@@ -177,25 +237,35 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     clearInterval(ws._pingTimer);
-    const id = ws._roomId;
-    if (!id || !rooms[id]) return;
+    const id     = ws._roomId;
+    const peerId = ws._peerId;
+    if (!id || !rooms[id] || !peerId) return;
     const room = rooms[id];
 
-    if (ws._role === 'host') {
-      room.host = null;
-      if (room.guest && room.guest.readyState === 1) {
-        send(room.guest, { type: 'host-disconnected' });
+    const wasHost = room.hostId === peerId;
+    delete room.peers[peerId];
+
+    if (wasHost) {
+      room.hostId = null;
+      // Назначаем нового хоста — первый оставшийся пир
+      const remaining = Object.keys(room.peers);
+      if (remaining.length > 0) {
+        const newHostId = remaining[0];
+        room.hostId = newHostId;
+        room.peers[newHostId].isHost = true;
+        // Говорим новому хосту
+        send(room.peers[newHostId].ws, { type: 'you-are-host', secret: room.hostSecret });
+        // Говорим всем остальным
+        broadcast(id, { type: 'new-host', id: newHostId }, newHostId);
+        console.log(`[~] Room ${id}: new host "${room.peers[newHostId].name}"`);
       }
-      scheduleRoomExpiry(id);
-      console.log(`[-] Room ${id}: host disconnected (room preserved ${ROOM_TTL/1000}s)`);
-    } else {
-      room.guest = null;
-      if (room.host && room.host.readyState === 1) {
-        send(room.host, { type: 'peer-left' });
-      }
-      scheduleRoomExpiry(id);
-      console.log(`[-] Room ${id}: guest disconnected`);
     }
+
+    // Оповестить всех об уходе
+    broadcast(id, { type: 'peer-left', id: peerId });
+
+    if (Object.keys(room.peers).length === 0) scheduleRoomExpiry(id);
+    console.log(`[-] Room ${id}: "${peerId}" left, total: ${Object.keys(room.peers).length}`);
   });
 
   ws.on('error', (e) => console.warn('WS error:', e.message));
@@ -203,5 +273,5 @@ wss.on('connection', (ws) => {
 
 httpServer.listen(PORT, () => {
   console.log(`\n🎬 CinemaSync on :${PORT}`);
-  console.log(`   Reconnect window: ${ROOM_TTL/1000}s\n`);
+  console.log(`   Max peers: ${MAX_PEERS}, Reconnect window: ${ROOM_TTL/1000}s\n`);
 });
