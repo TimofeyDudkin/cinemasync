@@ -65,8 +65,7 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* strength meter */
-.strength-bar{height:3px;border-radius:2px;background:var(--s3);margin-top:6px;overflow:hidden}
-.strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0}
+.strength-bar{display:none}
 
 /* ═══ ROOM ═══ */
 #room{height:100dvh;display:none;flex-direction:column;position:relative;z-index:2;overflow:hidden}
@@ -323,7 +322,7 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
   <div class="land-feats">
     <div class="feat-pill"><div class="feat-dot" style="background:var(--acc2)"></div>До 8 человек</div>
     <div class="feat-pill"><div class="feat-dot" style="background:var(--acc3)"></div>Видеозвонок</div>
-    <div class="feat-pill"><div class="feat-dot" style="background:var(--acc)"></div>Пароль</div>
+    <div class="feat-pill"><div class="feat-dot" style="background:var(--acc)"></div>Чат</div>
     <div class="feat-pill"><div class="feat-dot" style="background:var(--warn)"></div>Автохост</div>
   </div>
 
@@ -339,14 +338,7 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
         <label class="inp-label">Ваше имя</label>
         <input class="inp" id="c-name" placeholder="Как вас зовут?" maxlength="24" autocomplete="off">
       </div>
-      <div class="inp-group">
-        <label class="inp-label">Пароль комнаты <span style="color:var(--muted);font-weight:400">(необязательно)</span></label>
-        <div class="pword-wrap">
-          <input class="inp" id="c-pass" type="password" placeholder="Придумайте пароль" maxlength="32" autocomplete="new-password" oninput="checkStrength(this.value)">
-          <button class="pword-eye" onclick="toggleEye('c-pass')">👁</button>
-        </div>
-        <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
-      </div>
+
       <button class="btn btn-p" onclick="createRoom()" style="margin-top:4px">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
         Создать
@@ -363,13 +355,7 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
         <label class="inp-label">Код комнаты или ссылка</label>
         <input class="inp" id="j-code" placeholder="ABCDEF" autocomplete="off" onkeydown="if(event.key==='Enter')doJoin()">
       </div>
-      <div class="inp-group" id="j-pass-wrap">
-        <label class="inp-label">Пароль <span style="color:var(--muted);font-weight:400">(если есть)</span></label>
-        <div class="pword-wrap">
-          <input class="inp" id="j-pass" type="password" placeholder="Пароль от комнаты" maxlength="32" autocomplete="current-password" onkeydown="if(event.key==='Enter')doJoin()">
-          <button class="pword-eye" onclick="toggleEye('j-pass')">👁</button>
-        </div>
-      </div>
+
       <button class="btn btn-p" onclick="doJoin()" style="margin-top:4px">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M16 17l5-5-5-5M21 12H9"/></svg>
         Войти
@@ -385,10 +371,6 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
     <h2>Добро пожаловать!</h2>
     <p>Введите ваше имя и пароль комнаты (если есть)</p>
     <input class="inp" id="o-name" placeholder="Ваше имя" maxlength="24" autocomplete="off">
-    <div class="pword-wrap">
-      <input class="inp" id="o-pass" type="password" placeholder="Пароль (если есть)" maxlength="32" autocomplete="current-password">
-      <button class="pword-eye" onclick="toggleEye('o-pass')">👁</button>
-    </div>
     <button class="btn btn-p" onclick="overlayEnter()">Войти в комнату</button>
   </div>
 </div>
@@ -616,7 +598,7 @@ function checkStrength(v){
 function createRoom(){
   const n=(document.getElementById('c-name').value||'').trim();
   if(!n){toast('Введите имя');document.getElementById('c-name').focus();return}
-  myName=n; roomPass=(document.getElementById('c-pass').value||'').trim();
+  myName=n; roomPass='';
   roomId=rndId8(); isHost=true;
   enterRoom();
 }
@@ -627,7 +609,7 @@ function doJoin(){
   const m=v.match(/[?&]room=([A-Z0-9]{4,12})/i)||v.match(/([A-Z0-9]{4,12})/);
   if(m)v=m[1]; v=v.replace(/[^A-Z0-9]/gi,'').toUpperCase();
   if(v.length<4){toast('Неверный код');return}
-  myName=n; roomPass=(document.getElementById('j-pass').value||'').trim();
+  myName=n; roomPass='';
   roomId=v; isHost=false;
   enterRoom();
 }
@@ -803,8 +785,7 @@ function setupWS(){
   ws=wsI;
   ws.onopen=()=>{
     wsReconDelay=1200; showReconBanner(false);
-    const passHash=roomPass?hashPass(roomPass):'';
-    ws.send(JSON.stringify({type:'join-room',roomId,peerId:myId,name:myName,passHash,isCreator:isHost}));
+    ws.send(JSON.stringify({type:'join-room',roomId,peerId:myId,name:myName,isCreator:isHost}));
   };
   ws.onerror=()=>{};
   ws.onclose=()=>{ws=null; if(wsManualClose)return; setStatus('off','Нет связи'); showReconBanner(true); scheduleWsRecon()};
@@ -821,8 +802,7 @@ async function handleServerMsg(msg){
     case 'room-joined':
       showReconBanner(false);
       // msg.peers: [{id,name,color,isHost}]
-      if(msg.passError){toast('❌ Неверный пароль');leaveRoom();return}
-      if(msg.full){toast('❌ Комната заполнена');leaveRoom();return}
+      if(msg.full){toast('❌ Комната заполнена (макс. 8)');leaveRoom();return}
       setStatus('wait','Соединение...');
       // Apply host assignment from server
       if(msg.amHost){isHost=true;document.getElementById('tb-host-badge').style.display='';}
@@ -1387,12 +1367,10 @@ function buildInviteHTML(){
       <span class="part-role">${p.isHost?'<span class="crown">👑</span> Хост':'Участник'}</span>
     </div>`;
   });
-  const passNote=roomPass?`<div style="font-size:.68rem;color:var(--muted2);margin-top:8px">🔒 Комната защищена паролем</div>`:'';
   return `<div class="ibox">
     <h3>🔗 Пригласить</h3>
-    <p>Отправьте ссылку${roomPass?' и пароль':''} участникам</p>
+    <p>Отправьте ссылку участникам</p>
     <div class="ilink-row"><div class="ilink">${esc(link)}</div><button class="copy-btn" onclick="copyLink()">Копировать</button></div>
-    ${passNote}
     <button class="btn btn-s" style="font-size:.8rem;padding:10px 0;margin-top:8px" onclick="shareLink()">
       Поделиться ссылкой
     </button>
@@ -1451,7 +1429,7 @@ function copyLink(){
 }
 function shareLink(){
   const link=IS_SERVER?location.origin+'/?room='+roomId:'Код: '+roomId;
-  if(navigator.share)navigator.share({title:'CinemaSync',text:'Смотрим вместе! Код: '+roomId+(roomPass?' Пароль: '+roomPass:''),url:link}).catch(()=>{});
+  if(navigator.share)navigator.share({title:'CinemaSync',text:'Смотрим вместе! Код: '+roomId,url:link}).catch(()=>{});
   else copyLink();
 }
 function ripple(btn){const r=document.createElement('span');r.className='ripple';const sz=Math.max(btn.offsetWidth,btn.offsetHeight);r.style.width=r.style.height=sz+'px';r.style.left=((btn.offsetWidth-sz)/2)+'px';r.style.top=((btn.offsetHeight-sz)/2)+'px';btn.appendChild(r);setTimeout(()=>r.remove(),600)}
