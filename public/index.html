@@ -24,15 +24,11 @@ body{
   height:100%;height:100dvh;overflow:hidden;
   -webkit-font-smoothing:antialiased;overscroll-behavior:none;touch-action:manipulation
 }
-
-/* Grain */
 body::after{
   content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.028'/%3E%3C/svg%3E");
   opacity:.45
 }
-
-/* Glows */
 .glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;transition:opacity 1s}
 .g1{width:600px;height:600px;background:rgba(96,165,250,.04);top:-250px;left:-200px}
 .g2{width:500px;height:500px;background:rgba(167,139,250,.03);bottom:-150px;right:-150px}
@@ -46,103 +42,39 @@ body::after{
   padding:max(60px,calc(var(--safe-top)+24px)) 28px max(40px,calc(var(--safe-bot)+24px));
   text-align:center;
 }
-.land-eyebrow{
-  font-size:.65rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--muted2);margin-bottom:20px;
-  animation:fadeUp .5s ease both
-}
-.land-title{
-  font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2.6rem,8vw,4rem);
-  line-height:1;letter-spacing:-.03em;margin-bottom:14px;
-  animation:fadeUp .5s .07s ease both
-}
-.land-title span{
-  background:linear-gradient(135deg,var(--acc) 0%,var(--acc2) 55%,var(--acc3) 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text
-}
-.land-sub{
-  color:var(--muted2);font-size:.95rem;font-weight:400;line-height:1.6;
-  max-width:340px;margin:0 auto 40px;
-  animation:fadeUp .5s .14s ease both
-}
-
-/* Mode pills */
-.mode-pills{
-  display:flex;gap:8px;margin-bottom:40px;
-  animation:fadeUp .5s .2s ease both
-}
-.pill{
-  display:flex;align-items:center;gap:7px;
-  padding:9px 16px;border-radius:100px;
-  border:1px solid var(--border);background:var(--s1);
-  font-size:.75rem;font-weight:500;color:var(--muted2);
-  cursor:default
-}
+.land-eyebrow{font-size:.65rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted2);margin-bottom:20px;animation:fadeUp .5s ease both}
+.land-title{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2.6rem,8vw,4rem);line-height:1;letter-spacing:-.03em;margin-bottom:14px;animation:fadeUp .5s .07s ease both}
+.land-title span{background:linear-gradient(135deg,var(--acc) 0%,var(--acc2) 55%,var(--acc3) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.land-sub{color:var(--muted2);font-size:.95rem;font-weight:400;line-height:1.6;max-width:340px;margin:0 auto 40px;animation:fadeUp .5s .14s ease both}
+.mode-pills{display:flex;gap:8px;margin-bottom:40px;animation:fadeUp .5s .2s ease both}
+.pill{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:100px;border:1px solid var(--border);background:var(--s1);font-size:.75rem;font-weight:500;color:var(--muted2);cursor:default}
 .pill-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-
-/* Actions */
-.land-actions{
-  display:flex;flex-direction:column;gap:10px;
-  width:100%;max-width:300px;
-  animation:fadeUp .5s .26s ease both
-}
-.btn{
-  font-family:'Outfit',sans-serif;font-weight:600;font-size:.9rem;
-  padding:14px 24px;border-radius:var(--r-xl);border:none;cursor:pointer;
-  transition:transform .15s,box-shadow .15s,opacity .15s,background .15s;
-  display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  width:100%;max-width:300px;letter-spacing:.01em;user-select:none;position:relative;overflow:hidden
-}
+.land-actions{display:flex;flex-direction:column;gap:10px;width:100%;max-width:300px;animation:fadeUp .5s .26s ease both}
+.btn{font-family:'Outfit',sans-serif;font-weight:600;font-size:.9rem;padding:14px 24px;border-radius:var(--r-xl);border:none;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .15s,background .15s;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:300px;letter-spacing:.01em;user-select:none;position:relative;overflow:hidden}
 .btn:active{transform:scale(.97);opacity:.9}
-.btn-p{
-  background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;
-  box-shadow:0 4px 28px rgba(96,165,250,.28)
-}
+.btn-p{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 4px 28px rgba(96,165,250,.28)}
 .btn-p:hover{box-shadow:0 6px 36px rgba(96,165,250,.4)}
 .btn-s{background:var(--s2);color:var(--text);border:1px solid var(--border)}
 .btn-s:hover{background:var(--s3);border-color:rgba(96,165,250,.18)}
 .btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2);font-size:.83rem;padding:11px 24px}
 .btn-ghost:hover{color:var(--text);border-color:var(--border)}
-
 #join-wrap{width:100%;max-width:300px;animation:fadeUp .3s ease both}
 .join-row{display:flex;flex-direction:column;gap:8px}
-.inp{
-  background:var(--s2);border:1px solid var(--border);color:var(--text);
-  font-family:'Outfit',sans-serif;font-size:.92rem;
-  padding:13px 18px;border-radius:var(--r-xl);outline:none;transition:border-color .2s,background .2s;width:100%
-}
+.inp{background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:.92rem;padding:13px 18px;border-radius:var(--r-xl);outline:none;transition:border-color .2s,background .2s;width:100%}
 .inp::placeholder{color:var(--muted)}
 .inp:focus{border-color:rgba(96,165,250,.35);background:var(--s3)}
-
 @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 
 /* ─────────────────── ROOM WRAPPER ─────────────────── */
 #room{height:100dvh;display:none;flex-direction:column;position:relative;z-index:2;overflow:hidden}
 
 /* ─────────────────── TOPBAR ─────────────────── */
-.topbar{
-  height:calc(50px + var(--safe-top));padding-top:var(--safe-top);
-  display:flex;align-items:center;gap:10px;
-  padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));
-  background:rgba(8,10,14,.9);backdrop-filter:blur(24px) saturate(200%);
-  border-bottom:1px solid var(--border2);flex-shrink:0;z-index:100
-}
-.tb-logo{
-  font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;letter-spacing:-.02em;
-  background:linear-gradient(135deg,var(--acc),var(--acc2));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap
-}
-.tb-mode-badge{
-  font-size:.6rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
-  padding:3px 8px;border-radius:20px;border:1px solid;white-space:nowrap
-}
+.topbar{height:calc(50px + var(--safe-top));padding-top:var(--safe-top);display:flex;align-items:center;gap:10px;padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));background:rgba(8,10,14,.9);backdrop-filter:blur(24px) saturate(200%);border-bottom:1px solid var(--border2);flex-shrink:0;z-index:100}
+.tb-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;letter-spacing:-.02em;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap}
+.tb-mode-badge{font-size:.6rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:20px;border:1px solid;white-space:nowrap}
 .tb-mode-badge.cinema{color:var(--acc2);border-color:rgba(167,139,250,.25);background:rgba(167,139,250,.07)}
 .tb-mode-badge.call{color:var(--acc3);border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.07)}
-.tb-room{
-  background:var(--s2);border:1px solid var(--border);border-radius:6px;
-  padding:3px 9px;font-size:.62rem;color:var(--muted2);font-family:'Outfit',monospace;letter-spacing:.06em;
-  cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none
-}
+.tb-room{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:.62rem;color:var(--muted2);font-family:'Outfit',monospace;letter-spacing:.06em;cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
 .tb-room:active{background:var(--s3);color:var(--acc)}
 .tb-sp{flex:1}
 .tb-status{display:flex;align-items:center;gap:6px}
@@ -162,219 +94,121 @@ body::after{
 #yt-wrap{position:absolute;inset:0;background:#000;display:none;z-index:1}
 #yt-player,#yt-player iframe{position:absolute;inset:0;width:100%!important;height:100%!important;border:none}
 
-/* VIDEO CALL FULL-SCREEN MODE */
+/* ── FIX #3: VIDEO CALL FULL-SCREEN MODE ── */
+/* Call view занимает всё пространство vwrap */
 #call-view{
   position:absolute;inset:0;display:none;flex-direction:column;
   background:var(--s1);z-index:5
 }
 #call-view.active{display:flex}
+/* FIX: грид заполняет весь экран */
 .call-grid{
   flex:1;display:grid;grid-template-columns:1fr 1fr;
-  gap:3px;background:var(--bg);overflow:hidden
+  gap:2px;background:var(--bg);overflow:hidden;
+  height:100%;min-height:0;
 }
 .call-grid.solo{grid-template-columns:1fr}
 .call-tile{
   position:relative;background:var(--s2);overflow:hidden;
-  display:flex;align-items:center;justify-content:center
+  display:flex;align-items:center;justify-content:center;
+  /* FIX: явно задаём размеры */
+  width:100%;height:100%;min-height:0;
 }
-.call-tile video{width:100%;height:100%;object-fit:cover;display:block}
-.call-tile-label{
-  position:absolute;bottom:10px;left:12px;
-  font-size:.65rem;font-weight:600;letter-spacing:.04em;
-  background:rgba(8,10,14,.75);backdrop-filter:blur(10px);
-  padding:4px 10px;border-radius:20px;color:var(--text)
+/* FIX: видео заполняет тайл */
+.call-tile video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:block;
 }
-.call-tile-mute{
-  position:absolute;bottom:10px;right:10px;width:28px;height:28px;
-  border-radius:8px;background:rgba(8,10,14,.75);backdrop-filter:blur(10px);
-  border:none;color:var(--text);font-size:.75rem;cursor:pointer;
-  display:flex;align-items:center;justify-content:center
-}
-.call-nocam{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:10px;
-  background:linear-gradient(135deg,var(--s2),var(--s3))
-}
-.call-nocam-avatar{
-  width:64px;height:64px;border-radius:50%;
-  background:linear-gradient(135deg,var(--s3),var(--s4));
-  display:flex;align-items:center;justify-content:center;font-size:1.6rem;
-  border:2px solid var(--border)
-}
+.call-tile-label{position:absolute;bottom:10px;left:12px;font-size:.65rem;font-weight:600;letter-spacing:.04em;background:rgba(8,10,14,.75);backdrop-filter:blur(10px);padding:4px 10px;border-radius:20px;color:var(--text);z-index:2}
+.call-tile-mute{position:absolute;bottom:10px;right:10px;width:28px;height:28px;border-radius:8px;background:rgba(8,10,14,.75);backdrop-filter:blur(10px);border:none;color:var(--text);font-size:.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.call-nocam{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--s2),var(--s3));z-index:1}
+.call-nocam-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--s3),var(--s4));display:flex;align-items:center;justify-content:center;font-size:1.6rem;border:2px solid var(--border)}
 .call-nocam span{font-size:.72rem;color:var(--muted2);font-weight:500}
 
 /* PLACEHOLDER */
-.vph{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:14px;color:var(--muted);
-  background:radial-gradient(ellipse at 50% 40%,#0d1622 0%,var(--bg) 70%);z-index:2
-}
+.vph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);background:radial-gradient(ellipse at 50% 40%,#0d1622 0%,var(--bg) 70%);z-index:2}
 .vph-icon{font-size:3rem;opacity:.15}
 .vph p{font-size:.82rem;font-weight:400;opacity:.65;letter-spacing:.01em}
 .vph-chips{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:2px}
 .chip{padding:4px 11px;border-radius:20px;font-size:.68rem;border:1px solid;font-weight:500}
 
 /* STATUS OVERLAYS */
-.sync-ind{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(8,10,14,.92);border:1px solid rgba(52,211,153,.3);
-  border-radius:20px;padding:5px 14px;font-size:.68rem;color:var(--acc3);
-  z-index:50;display:none;align-items:center;gap:6px;
-  backdrop-filter:blur(16px);white-space:nowrap
-}
+.sync-ind{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(8,10,14,.92);border:1px solid rgba(52,211,153,.3);border-radius:20px;padding:5px 14px;font-size:.68rem;color:var(--acc3);z-index:50;display:none;align-items:center;gap:6px;backdrop-filter:blur(16px);white-space:nowrap}
 .sync-ind.show{display:flex}
 .spin{width:8px;height:8px;border:1.5px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.recon-banner{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
-  border-radius:12px;padding:6px 14px;font-size:.72rem;color:var(--warn);
-  z-index:50;display:none;align-items:center;gap:8px;
-  backdrop-filter:blur(16px);white-space:nowrap
-}
+.recon-banner{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:12px;padding:6px 14px;font-size:.72rem;color:var(--warn);z-index:50;display:none;align-items:center;gap:8px;backdrop-filter:blur(16px);white-space:nowrap}
 .recon-banner.show{display:flex}
-.iframe-note{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(8,10,14,.9);border:1px solid var(--border);
-  border-radius:10px;padding:5px 12px;font-size:.68rem;color:var(--muted2);
-  z-index:50;pointer-events:none;white-space:nowrap;display:none
-}
+.iframe-note{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(8,10,14,.9);border:1px solid var(--border);border-radius:10px;padding:5px 12px;font-size:.68rem;color:var(--muted2);z-index:50;pointer-events:none;white-space:nowrap;display:none}
 
 /* VIDEO CONTROLS OVERLAY */
-.vid-ctrl{
-  position:absolute;bottom:0;left:0;right:0;
-  background:linear-gradient(transparent,rgba(8,10,14,.85) 60%);
-  padding:48px 16px 16px;z-index:40;display:none;
-  flex-direction:column;gap:10px;transition:opacity .25s;
-}
+.vid-ctrl{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(8,10,14,.85) 60%);padding:48px 16px 16px;z-index:40;display:none;flex-direction:column;gap:10px;transition:opacity .25s;}
 .vid-ctrl.visible{display:flex}
 .vc-prog{display:flex;align-items:center;gap:9px}
-.vc-bar{
-  flex:1;height:2px;background:rgba(255,255,255,.12);
-  border-radius:2px;cursor:pointer;position:relative;
-  padding:10px 0;margin:-10px 0;
-}
+.vc-bar{flex:1;height:2px;background:rgba(255,255,255,.12);border-radius:2px;cursor:pointer;position:relative;padding:10px 0;margin:-10px 0;}
 .vc-bar-inner{height:2px;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:2px;width:0%;pointer-events:none;position:relative;top:0}
 .vc-time{font-size:.63rem;color:rgba(255,255,255,.5);font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:500}
 .vc-row{display:flex;align-items:center;gap:7px}
-.vc-play{
-  width:38px;height:38px;border-radius:10px;
-  background:rgba(255,255,255,.12);border:none;color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:.95rem;
-  cursor:pointer;backdrop-filter:blur(8px);transition:background .15s;flex-shrink:0
-}
+.vc-play{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);border:none;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.95rem;cursor:pointer;backdrop-filter:blur(8px);transition:background .15s;flex-shrink:0}
 .vc-play:active{background:rgba(255,255,255,.22)}
 .vc-sp{flex:1}
-.vc-icon{
-  width:34px;height:34px;border-radius:9px;
-  background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.6);
-  display:flex;align-items:center;justify-content:center;font-size:.82rem;
-  cursor:pointer;flex-shrink:0
-}
+.vc-icon{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-size:.82rem;cursor:pointer;flex-shrink:0}
 .vc-icon:active{background:rgba(255,255,255,.18)}
 .vc-reacts{display:flex;gap:4px}
-.rbtn{
-  width:32px;height:32px;border-radius:9px;
-  background:rgba(255,255,255,.08);border:none;font-size:.82rem;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:transform .15s
-}
+.rbtn{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.08);border:none;font-size:.82rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s}
 .rbtn:active{transform:scale(1.3);background:rgba(255,255,255,.18)}
 
 /* WEBCAMS (cinema mode) */
-.cam-wrap{
-  position:absolute;border-radius:10px;overflow:hidden;
-  border:1.5px solid rgba(255,255,255,.08);background:var(--s1);
-  box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:60
-}
+.cam-wrap{position:absolute;border-radius:10px;overflow:hidden;border:1.5px solid rgba(255,255,255,.08);background:var(--s1);box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:60}
 .cam-video{width:100%;height:100%;object-fit:cover;display:block}
-.cam-lbl{
-  position:absolute;bottom:5px;left:7px;font-size:.58rem;font-weight:600;letter-spacing:.03em;
-  background:rgba(0,0,0,.6);padding:2px 7px;border-radius:20px;backdrop-filter:blur(6px)
-}
-.cam-nocam{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:var(--s1);color:var(--muted);font-size:.63rem;gap:4px
-}
+.cam-lbl{position:absolute;bottom:5px;left:7px;font-size:.58rem;font-weight:600;letter-spacing:.03em;background:rgba(0,0,0,.6);padding:2px 7px;border-radius:20px;backdrop-filter:blur(6px)}
+.cam-nocam{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--s1);color:var(--muted);font-size:.63rem;gap:4px}
 .cam-nocam-icon{font-size:1.5rem;opacity:.3}
 #peer-wrap{bottom:72px;right:12px;width:90px;height:64px;cursor:pointer;user-select:none;transition:width .25s,height .25s}
 #peer-wrap.expanded{width:152px;height:108px}
 #peer-wrap .cam-lbl{color:var(--acc2)}
-.cam-mute{
-  position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:6px;
-  background:rgba(0,0,0,.55);border:none;color:#fff;font-size:.58rem;
-  cursor:pointer;display:flex;align-items:center;justify-content:center
-}
+.cam-mute{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:6px;background:rgba(0,0,0,.55);border:none;color:#fff;font-size:.58rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #my-wrap{bottom:72px;left:12px;width:72px;height:52px}
 #my-wrap .cam-lbl{color:var(--acc3)}
 #my-video{transform:scaleX(-1)}
 
+/* ── FIX #1: YouTube Fullscreen Button ── */
+#yt-fs-btn{
+  position:absolute;bottom:16px;right:16px;z-index:50;
+  width:38px;height:38px;border-radius:10px;
+  background:rgba(8,10,14,.75);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.12);color:#fff;
+  display:none;align-items:center;justify-content:center;
+  cursor:pointer;font-size:1rem;transition:background .15s;
+}
+#yt-fs-btn:active{background:rgba(255,255,255,.2)}
+#yt-fs-btn.show{display:flex}
+
 /* ─────────────────── CALLBAR ─────────────────── */
-.callbar{
-  display:flex;align-items:center;justify-content:space-around;
-  padding:7px calc(8px + var(--safe-r)) calc(8px + var(--safe-bot)) calc(8px + var(--safe-l));
-  background:rgba(8,10,14,.96);backdrop-filter:blur(24px) saturate(180%);
-  border-top:1px solid var(--border2);flex-shrink:0;z-index:100;gap:3px
-}
-.cb-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;flex:1;max-width:64px;height:52px;border-radius:var(--r-md);
-  background:transparent;border:none;color:var(--muted2);
-  cursor:pointer;transition:all .15s;font-size:1rem;position:relative;user-select:none
-}
+.callbar{display:flex;align-items:center;justify-content:space-around;padding:7px calc(8px + var(--safe-r)) calc(8px + var(--safe-bot)) calc(8px + var(--safe-l));background:rgba(8,10,14,.96);backdrop-filter:blur(24px) saturate(180%);border-top:1px solid var(--border2);flex-shrink:0;z-index:100;gap:3px}
+.cb-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;max-width:64px;height:52px;border-radius:var(--r-md);background:transparent;border:none;color:var(--muted2);cursor:pointer;transition:all .15s;font-size:1rem;position:relative;user-select:none}
 .cb-btn:active{transform:scale(.93);color:var(--text)}
 .cb-btn-lbl{font-size:.48rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .cb-btn.on{color:var(--acc)}
 .cb-btn.on .cb-btn-lbl{color:var(--acc)}
 .cb-btn.danger{color:var(--red)}
-.cb-center{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;width:54px;height:54px;border-radius:16px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--acc),var(--acc2));
-  border:none;color:#fff;font-size:1.15rem;
-  cursor:pointer;box-shadow:0 4px 20px rgba(96,165,250,.35);
-  transition:transform .15s,box-shadow .15s;user-select:none
-}
+.cb-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:54px;height:54px;border-radius:16px;flex-shrink:0;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;font-size:1.15rem;cursor:pointer;box-shadow:0 4px 20px rgba(96,165,250,.35);transition:transform .15s,box-shadow .15s;user-select:none}
 .cb-center:active{transform:scale(.93);box-shadow:0 2px 10px rgba(96,165,250,.25)}
 .cb-center.call-mode{background:linear-gradient(135deg,var(--acc3),var(--acc))}
-.badge{
-  position:absolute;top:4px;right:calc(50% - 18px);
-  min-width:15px;height:15px;border-radius:8px;padding:0 4px;
-  background:var(--red);font-size:.5rem;color:#fff;
-  display:none;align-items:center;justify-content:center;font-weight:700
-}
+.badge{position:absolute;top:4px;right:calc(50% - 18px);min-width:15px;height:15px;border-radius:8px;padding:0 4px;background:var(--red);font-size:.5rem;color:#fff;display:none;align-items:center;justify-content:center;font-weight:700}
 .badge.show{display:flex}
 
 /* ─────────────────── SHEETS ─────────────────── */
-.sheet-overlay{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
-  backdrop-filter:blur(6px);z-index:200
-}
+.sheet-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:200}
 .sheet-overlay.show{display:block}
-.sheet{
-  position:fixed;bottom:0;left:0;right:0;
-  background:var(--s1);border-radius:var(--r-xl) var(--r-xl) 0 0;
-  border-top:1px solid var(--border);z-index:210;
-  max-height:82dvh;display:flex;flex-direction:column;
-  transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);
-  padding-bottom:var(--safe-bot)
-}
+.sheet{position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-radius:var(--r-xl) var(--r-xl) 0 0;border-top:1px solid var(--border);z-index:210;max-height:82dvh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);padding-bottom:var(--safe-bot)}
 .sheet.open{transform:translateY(0)}
-.sheet-handle{
-  width:40px;height:4px;border-radius:2px;background:var(--s4);
-  margin:12px auto 0;flex-shrink:0;cursor:pointer
-}
-.sheet-header{
-  display:flex;align-items:center;padding:14px 20px 10px;
-  border-bottom:1px solid var(--border2);flex-shrink:0
-}
+.sheet-handle{width:40px;height:4px;border-radius:2px;background:var(--s4);margin:12px auto 0;flex-shrink:0;cursor:pointer}
+.sheet-header{display:flex;align-items:center;padding:14px 20px 10px;border-bottom:1px solid var(--border2);flex-shrink:0}
 .sheet-title{font-size:.9rem;font-weight:600;flex:1;letter-spacing:-.01em}
-.sheet-close{
-  width:28px;height:28px;border-radius:8px;border:none;
-  background:var(--s3);color:var(--muted2);cursor:pointer;font-size:.75rem;
-  display:flex;align-items:center;justify-content:center;transition:background .15s
-}
+.sheet-close{width:28px;height:28px;border-radius:8px;border:none;background:var(--s3);color:var(--muted2);cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .sheet-close:active{background:var(--s4)}
 .sheet-body{overflow-y:auto;padding:16px 20px;flex:1;scrollbar-width:none}
 .sheet-body::-webkit-scrollbar{display:none}
@@ -385,111 +219,55 @@ body::after{
 .msg.me{align-items:flex-end}
 .msg.them{align-items:flex-start}
 .msg.sys{align-items:center}
-.bubble{
-  max-width:72%;padding:9px 14px;font-size:.85rem;line-height:1.5;word-break:break-word
-}
-.msg.me .bubble{
-  background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;
-  border-radius:16px 16px 4px 16px
-}
-.msg.them .bubble{
-  background:var(--s2);color:var(--text);
-  border-radius:16px 16px 16px 4px;border:1px solid var(--border)
-}
-.msg.sys .bubble{
-  background:transparent;color:var(--muted2);font-size:.72rem;
-  border:none;padding:4px 10px;text-align:center
-}
+.bubble{max-width:72%;padding:9px 14px;font-size:.85rem;line-height:1.5;word-break:break-word}
+.msg.me .bubble{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-radius:16px 16px 4px 16px}
+.msg.them .bubble{background:var(--s2);color:var(--text);border-radius:16px 16px 16px 4px;border:1px solid var(--border)}
+.msg.sys .bubble{background:transparent;color:var(--muted2);font-size:.72rem;border:none;padding:4px 10px;text-align:center}
 .msg-time{font-size:.58rem;color:var(--muted);padding:0 4px}
-.chat-foot{
-  display:flex;align-items:flex-end;gap:8px;padding:10px 14px;
-  border-top:1px solid var(--border2);flex-shrink:0;padding-bottom:max(10px,calc(var(--safe-bot)))
-}
-.chat-in{
-  flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);
-  font-family:'Outfit',sans-serif;font-size:.88rem;padding:10px 14px;
-  border-radius:var(--r-xl);outline:none;resize:none;max-height:100px;
-  transition:border-color .2s;line-height:1.45;overflow-y:auto
-}
+.chat-foot{display:flex;align-items:flex-end;gap:8px;padding:10px 14px;border-top:1px solid var(--border2);flex-shrink:0;padding-bottom:max(10px,calc(var(--safe-bot)))}
+.chat-in{flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:.88rem;padding:10px 14px;border-radius:var(--r-xl);outline:none;resize:none;max-height:100px;transition:border-color .2s;line-height:1.45;overflow-y:auto}
 .chat-in:focus{border-color:rgba(96,165,250,.3)}
-.send-btn{
-  width:40px;height:40px;border-radius:12px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:transform .15s;font-size:.9rem
-}
+.send-btn{width:40px;height:40px;border-radius:12px;flex-shrink:0;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s;font-size:.9rem}
 .send-btn:active{transform:scale(.92)}
 .send-icon::before{content:'↑';font-size:1rem;font-weight:700}
 
 /* Video Sheet */
 .vlabel{font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
 .srcs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-.src-btn{
-  padding:7px 14px;border-radius:20px;border:1px solid var(--border);
-  background:var(--s2);color:var(--muted2);font-family:'Outfit',sans-serif;
-  font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap
-}
+.src-btn{padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--s2);color:var(--muted2);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
 .src-btn:active{transform:scale(.96)}
 .src-btn.on{color:var(--acc);border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.08)}
 .src-btn.yt.on{color:#f87171;border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.07)}
 .src-btn.vk.on{color:#93c5fd;border-color:rgba(147,197,253,.3);background:rgba(147,197,253,.07)}
 .src-btn.kp.on{color:#fdba74;border-color:rgba(253,186,116,.3);background:rgba(253,186,116,.07)}
 .vurl-wrap{position:relative;margin-bottom:8px}
-.vurl{
-  width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);
-  font-family:'Outfit',sans-serif;font-size:.88rem;
-  padding:11px 38px 11px 14px;border-radius:var(--r-md);outline:none;transition:border-color .2s
-}
+.vurl{width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:.88rem;padding:11px 38px 11px 14px;border-radius:var(--r-md);outline:none;transition:border-color .2s}
 .vurl::placeholder{color:var(--muted)}
 .vurl:focus{border-color:rgba(96,165,250,.3)}
-.vurl-clear{
-  position:absolute;right:10px;top:50%;transform:translateY(-50%);
-  width:22px;height:22px;border-radius:6px;border:none;background:var(--s3);
-  color:var(--muted2);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:.7rem
-}
+.vurl-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:6px;border:none;background:var(--s3);color:var(--muted2);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:.7rem}
 .vurl-clear.show{display:flex}
 .vhint{font-size:.7rem;color:var(--muted2);margin-bottom:12px;line-height:1.5}
 .vhint b{color:var(--text)}
 .vbtn-row{display:flex;gap:8px;margin-bottom:16px}
 .vsec{padding:14px 0;border-top:1px solid var(--border2)}
-.pl-item{
-  display:flex;align-items:center;gap:10px;padding:9px 10px;
-  border-radius:var(--r-md);cursor:pointer;transition:background .15s;margin-bottom:2px
-}
+.pl-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;transition:background .15s;margin-bottom:2px}
 .pl-item:active{background:var(--s3)}
 .pl-ico{font-size:.88rem;width:20px;text-align:center;flex-shrink:0}
 .pl-name{flex:1;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl-del{
-  width:22px;height:22px;border-radius:6px;border:none;background:transparent;
-  color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem
-}
+.pl-del{width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem}
 .pl-del:active{background:var(--s3);color:var(--red)}
 
 /* Invite Sheet */
-.ibox{
-  background:var(--s2);border:1px solid var(--border);border-radius:var(--r-lg);
-  padding:16px;margin-bottom:10px;display:flex;flex-direction:column;gap:9px
-}
+.ibox{background:var(--s2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:10px;display:flex;flex-direction:column;gap:9px}
 .ibox-icon{font-size:1.2rem}
 .ibox h3{font-size:.9rem;font-weight:600;letter-spacing:-.01em}
 .ibox p{font-size:.78rem;color:var(--muted2);line-height:1.55}
 .ilink-row{display:flex;align-items:center;gap:8px}
-.ilink{
-  flex:1;font-size:.72rem;color:var(--muted2);background:var(--s3);
-  border-radius:8px;padding:9px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:'Outfit',monospace
-}
-.copy-btn{
-  padding:8px 14px;border-radius:8px;border:1px solid var(--border);
-  background:var(--s3);color:var(--text);font-family:'Outfit',sans-serif;
-  font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s
-}
+.ilink{flex:1;font-size:.72rem;color:var(--muted2);background:var(--s3);border-radius:8px;padding:9px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Outfit',monospace}
+.copy-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--s3);color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s}
 .copy-btn:active{background:var(--s4)}
 .parts-list{display:flex;flex-direction:column;gap:2px}
-.part-row{
-  display:flex;align-items:center;gap:9px;padding:7px 0;
-  border-bottom:1px solid var(--border2);font-size:.82rem
-}
+.part-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:.82rem}
 .part-row:last-child{border-bottom:none}
 .part-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .part-role{color:var(--muted2);font-size:.68rem;margin-left:auto;font-weight:500;letter-spacing:.03em}
@@ -500,18 +278,10 @@ body::after{
   .room-body{flex-direction:row}
   .vwrap{flex:1;min-width:0}
   #call-view{position:absolute;inset:0}
-  .sidebar-desktop{
-    width:300px;flex-shrink:0;display:flex;flex-direction:column;
-    background:var(--s1);border-left:1px solid var(--border)
-  }
+  .sidebar-desktop{width:300px;flex-shrink:0;display:flex;flex-direction:column;background:var(--s1);border-left:1px solid var(--border)}
   .sheet-overlay,.sheet{display:none!important}
   .stabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 4px}
-  .stab{
-    flex:1;padding:11px 4px;text-align:center;cursor:pointer;
-    font-size:.65rem;font-weight:700;color:var(--muted);
-    border-bottom:2px solid transparent;transition:all .2s;
-    letter-spacing:.06em;text-transform:uppercase
-  }
+  .stab{flex:1;padding:11px 4px;text-align:center;cursor:pointer;font-size:.65rem;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;letter-spacing:.06em;text-transform:uppercase}
   .stab.on{color:var(--acc);border-bottom-color:var(--acc)}
   .stab:hover:not(.on){color:var(--text)}
   .dpanel{display:none;flex:1;flex-direction:column;overflow:hidden}
@@ -525,29 +295,11 @@ body::after{
 }
 
 /* ─────────────────── TOAST / MODAL ─────────────────── */
-.toast{
-  position:fixed;bottom:calc(72px + var(--safe-bot));
-  left:50%;transform:translateX(-50%) translateY(14px);
-  background:rgba(8,10,14,.97);border:1px solid var(--border);
-  border-radius:12px;padding:9px 18px;font-size:.8rem;color:var(--text);
-  z-index:9000;opacity:0;transition:all .25s;pointer-events:none;
-  backdrop-filter:blur(20px);white-space:nowrap;
-  box-shadow:0 8px 32px rgba(0,0,0,.5);font-weight:500
-}
+.toast{position:fixed;bottom:calc(72px + var(--safe-bot));left:50%;transform:translateX(-50%) translateY(14px);background:rgba(8,10,14,.97);border:1px solid var(--border);border-radius:12px;padding:9px 18px;font-size:.8rem;color:var(--text);z-index:9000;opacity:0;transition:all .25s;pointer-events:none;backdrop-filter:blur(20px);white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.5);font-weight:500}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.modal-bg{
-  position:fixed;inset:0;background:rgba(0,0,0,.8);
-  backdrop-filter:blur(14px);z-index:8000;display:none;
-  align-items:flex-end;justify-content:center
-}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(14px);z-index:8000;display:none;align-items:flex-end;justify-content:center}
 .modal-bg.show{display:flex}
-.modal{
-  background:var(--s1);border:1px solid var(--border);
-  border-radius:var(--r-xl) var(--r-xl) 0 0;
-  padding:28px 28px calc(28px + var(--safe-bot));width:100%;
-  text-align:center;display:flex;flex-direction:column;gap:14px;
-  box-shadow:0 -20px 60px rgba(0,0,0,.7);animation:slideUp .22s ease
-}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-xl) var(--r-xl) 0 0;padding:28px 28px calc(28px + var(--safe-bot));width:100%;text-align:center;display:flex;flex-direction:column;gap:14px;box-shadow:0 -20px 60px rgba(0,0,0,.7);animation:slideUp .22s ease}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
 @media(min-width:480px){
   .modal-bg{align-items:center}
@@ -580,22 +332,11 @@ body::after{
   <div class="land-eyebrow">Смотрите вместе · Без регистрации</div>
   <h1 class="land-title"><span>Cinema</span>Sync</h1>
   <p class="land-sub">Синхронный просмотр видео и видеозвонки для двух человек</p>
-
   <div class="mode-pills">
-    <div class="pill">
-      <div class="pill-dot" style="background:var(--acc2)"></div>
-      Кино вместе
-    </div>
-    <div class="pill">
-      <div class="pill-dot" style="background:var(--acc3)"></div>
-      Видеозвонок
-    </div>
-    <div class="pill">
-      <div class="pill-dot" style="background:var(--acc)"></div>
-      Чат
-    </div>
+    <div class="pill"><div class="pill-dot" style="background:var(--acc2)"></div>Кино вместе</div>
+    <div class="pill"><div class="pill-dot" style="background:var(--acc3)"></div>Видеозвонок</div>
+    <div class="pill"><div class="pill-dot" style="background:var(--acc)"></div>Чат</div>
   </div>
-
   <div class="land-actions">
     <button class="btn btn-p" onclick="createRoom()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
@@ -606,7 +347,6 @@ body::after{
       Войти по коду
     </button>
   </div>
-
   <div id="join-wrap" style="display:none;margin-top:12px;width:100%;max-width:300px">
     <div class="join-row">
       <input class="inp" id="join-input" placeholder="Код комнаты или ссылка" autocomplete="off" onkeydown="if(event.key==='Enter')doJoin()">
@@ -635,7 +375,10 @@ body::after{
       <div id="yt-wrap"><div id="yt-player"></div></div>
       <iframe id="iframe-player" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
 
-      <!-- VIDEO CALL VIEW (replaces video in call mode) -->
+      <!-- ── FIX #1: YouTube Fullscreen button ── -->
+      <button id="yt-fs-btn" onclick="toggleYTFullscreen(event)" title="Полный экран">⛶</button>
+
+      <!-- VIDEO CALL VIEW -->
       <div id="call-view">
         <div class="call-grid" id="call-grid">
           <div class="call-tile">
@@ -658,7 +401,7 @@ body::after{
         </div>
       </div>
 
-      <!-- PLACEHOLDER (cinema mode) -->
+      <!-- PLACEHOLDER -->
       <div class="vph" id="vph">
         <div class="vph-icon">🎬</div>
         <p>Добавьте видео или переключитесь в режим звонка</p>
@@ -674,7 +417,7 @@ body::after{
       <div class="iframe-note" id="iframe-note"></div>
       <div class="sync-ind" id="sync-ind"><div class="spin"></div>Синхронизация...</div>
 
-      <!-- Peer cam (cinema mode only) -->
+      <!-- Peer cam (cinema mode) -->
       <div class="cam-wrap" id="peer-wrap" onclick="togglePeerSize(event)">
         <video id="peer-video" class="cam-video" autoplay playsinline webkit-playsinline></video>
         <div class="cam-nocam" id="peer-nocam"><div class="cam-nocam-icon">👤</div><span>Партнёр</span></div>
@@ -682,7 +425,7 @@ body::after{
         <button class="cam-mute" id="peer-mute-btn" onclick="togglePeerMute(event)">🔊</button>
       </div>
 
-      <!-- My cam (cinema mode only) -->
+      <!-- My cam (cinema mode) -->
       <div class="cam-wrap" id="my-wrap">
         <video id="my-video" class="cam-video" autoplay playsinline webkit-playsinline muted></video>
         <div class="cam-lbl">Вы</div>
@@ -835,14 +578,9 @@ body::after{
   <div class="sheet-body">
     <div class="vlabel">Режим комнаты</div>
     <div style="display:flex;gap:8px;margin-bottom:20px">
-      <button class="src-btn on" id="m-mode-cinema" onclick="switchMode('cinema')" style="flex:1;padding:10px 8px">
-        🎬 Кино
-      </button>
-      <button class="src-btn" id="m-mode-call" onclick="switchMode('call')" style="flex:1;padding:10px 8px">
-        📞 Звонок
-      </button>
+      <button class="src-btn on" id="m-mode-cinema" onclick="switchMode('cinema')" style="flex:1;padding:10px 8px">🎬 Кино</button>
+      <button class="src-btn" id="m-mode-call" onclick="switchMode('call')" style="flex:1;padding:10px 8px">📞 Звонок</button>
     </div>
-
     <div id="m-cinema-panel">
       <div class="vlabel">Источник видео</div>
       <div class="srcs" id="m-srcs">
@@ -868,7 +606,6 @@ body::after{
         <div class="pl-item" onclick="demo('yt')"><span class="pl-ico" style="color:#f87171">▶</span><span class="pl-name">YouTube демо</span></div>
       </div>
     </div>
-
     <div id="m-call-panel" style="display:none">
       <div class="ibox">
         <div class="ibox-icon">📹</div>
@@ -921,7 +658,10 @@ body::after{
 
 <script>
 // ════════════════════════════════════════
-//  CinemaSync — client
+//  CinemaSync — client (patched)
+//  FIX #1 — YouTube fullscreen
+//  FIX #2 — Media/reconnect (видно и слышно партнёра)
+//  FIX #3 — Call mode video scale
 // ════════════════════════════════════════
 function buildWsUrl(){const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host}
 const IS_SERVER=location.protocol==='http:'||location.protocol==='https:';
@@ -938,7 +678,7 @@ let wsReconTimer=null,wsReconDelay=1000,wsManualClose=false;
 let controlsTimer=null,controlsVisible=false;
 let unreadMsgs=0,activeSheet=null;
 let playlist=[],currentSrc='youtube';
-let currentMode='cinema'; // 'cinema' | 'call'
+let currentMode='cinema';
 
 // YT
 let ytPlayer=null,ytAPIReady=false,ytPendingId=null,ytState=-1,ytDuration=0;
@@ -973,8 +713,11 @@ function enterRoom(){
   ['m-ilink','d-ilink'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=link});
   if(IS_SERVER)try{history.replaceState({},'','/?room='+roomId)}catch(e){}
   saveSession();
-  if(IS_SERVER)setupWS();
-  else{setStatus('wait','Локальный режим');setupLocalMode();setupMedia();toast('Код: '+roomId)}
+  // ── FIX #2: всегда запрашиваем медиа ДО WebSocket/BroadcastChannel
+  setupMedia().then(()=>{
+    if(IS_SERVER)setupWS();
+    else{setStatus('wait','Локальный режим');setupLocalMode();toast('Код: '+roomId)}
+  });
 }
 
 // ─── MODE SWITCH ─────────────────────────
@@ -982,38 +725,27 @@ function switchMode(mode){
   if(currentMode===mode)return;
   currentMode=mode;
   const isCall=mode==='call';
-
-  // Update badge
   const badge=document.getElementById('tb-mode-badge');
   badge.textContent=isCall?'Звонок':'Кино';
   badge.className='tb-mode-badge '+(isCall?'call':'cinema');
-
-  // Update center button
   const cbCenter=document.getElementById('cb-center-btn');
   cbCenter.className='cb-center'+(isCall?' call-mode':'');
-
-  // Toggle call view
   const callView=document.getElementById('call-view');
   callView.classList.toggle('active',isCall);
-
-  // Cam wrap visibility (cinema mini-cams)
   document.getElementById('peer-wrap').style.display=isCall?'none':'block';
   document.getElementById('my-wrap').style.display=isCall?'none':'block';
-
-  // Controls
+  // ── FIX #1: показываем/скрываем YT-FS кнопку
+  const ytFs=document.getElementById('yt-fs-btn');
+  if(ytFs)ytFs.classList.toggle('show', !isCall && document.getElementById('yt-wrap').style.display!=='none');
   if(isCall){
     document.getElementById('vid-ctrl').classList.remove('visible');
     document.getElementById('g3').classList.add('active');
-    // Mirror streams to call videos
-    if(localStream)myVCall.srcObject=localStream;
-    if(peerV.srcObject)peerVCall.srcObject=peerV.srcObject;
+    if(localStream){myVCall.srcObject=localStream;myVCall.play().catch(()=>{})}
+    if(peerV.srcObject){peerVCall.srcObject=peerV.srcObject;peerVCall.play().catch(()=>{})}
   }else{
     document.getElementById('g3').classList.remove('active');
-    // Mirror streams back
-    if(localStream)myV.srcObject=localStream;
+    if(localStream){myV.srcObject=localStream;myV.play().catch(()=>{})}
   }
-
-  // Panels
   ['m','d'].forEach(p=>{
     const cinema=document.getElementById(p+'-cinema-panel');
     const call=document.getElementById(p+'-call-panel');
@@ -1024,7 +756,6 @@ function switchMode(mode){
     if(cinemaBtn)cinemaBtn.classList.toggle('on',!isCall);
     if(callBtn)callBtn.classList.toggle('on',isCall);
   });
-
   toast(isCall?'📞 Режим звонка':'🎬 Режим кино');
   closeSheet();
 }
@@ -1036,9 +767,16 @@ function updateCallBtns(){
   if(mMic)mMic.textContent=isMic?'🎙️ Микрофон включён':'🎙️ Включить микрофон';
 }
 
-// MEDIA
+// ── FIX #2: MEDIA — возвращает Promise, не запускаем WS пока медиа не готова
 async function setupMedia(){
-  try{localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  // Если стрим уже есть — просто обновляем элементы
+  if(localStream){
+    myV.srcObject=localStream;
+    myVCall.srcObject=localStream;
+    return;
+  }
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
     myV.srcObject=localStream;myVCall.srcObject=localStream;
     isCam=true;isMic=true;
     document.getElementById('btn-cam').classList.add('on');
@@ -1046,7 +784,8 @@ async function setupMedia(){
     document.getElementById('my-nocam-call').style.display='none';
     updateCallBtns();
   }catch(e){
-    try{localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    try{
+      localStream=await navigator.mediaDevices.getUserMedia({audio:true});
       myV.srcObject=localStream;myVCall.srcObject=localStream;
       isMic=true;
       document.getElementById('btn-mic').classList.add('on');
@@ -1079,7 +818,7 @@ function setupWS(){
   ws=wsI;
   ws.onopen=async()=>{
     wsReconDelay=1000;showReconBanner(false);
-    if(!localStream)await setupMedia();
+    // ── FIX #2: медиа уже запрошена в enterRoom(), здесь просто регистрируемся
     if(isHost)ws.send(JSON.stringify({type:'create',roomId,secret:hostSecret||''}));
     else{const s=loadSession();if(s&&s.secret&&s.roomId===roomId){isHost=true;hostSecret=s.secret;ws.send(JSON.stringify({type:'join',roomId,secret:hostSecret}))}else ws.send(JSON.stringify({type:'join',roomId,secret:''}))}
   };
@@ -1099,11 +838,13 @@ function setupWS(){
       case'answer':await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));remoteDescSet=true;await flushIceQueue();break;
       case'ice':await handleIce(msg.candidate);break;
       case'sync':handleSync(msg.payload);break;
-      case'peer-left':setStatus('off','Партнёр отключился');sysmsg('🔴 Партнёр отключился');
+      case'peer-left':
+        setStatus('off','Партнёр отключился');sysmsg('🔴 Партнёр отключился');
         document.getElementById('peer-nocam').style.display='flex';
         document.getElementById('peer-nocam-call').style.display='flex';
         document.getElementById('peer-nocam-call').querySelector('span').textContent='Партнёр ушёл';
-        peerV.srcObject=null;peerVCall.srcObject=null;removePart();break;
+        peerV.srcObject=null;peerVCall.srcObject=null;removePart();
+        break;
       case'relay-mode':if(!relayMode){relayMode=true;setStatus('on','Relay ✓');sysmsg('⚡ Через сервер')}break;
     }
   };
@@ -1133,31 +874,66 @@ setInterval(saveState,5000);
 async function handleIce(c){if(!c)return;if(remoteDescSet&&pc)try{await pc.addIceCandidate(new RTCIceCandidate(c))}catch(e){}else iceCandidateQueue.push(c)}
 async function flushIceQueue(){while(iceCandidateQueue.length){const c=iceCandidateQueue.shift();try{await pc.addIceCandidate(new RTCIceCandidate(c))}catch(e){}}}
 
-// PEER CONNECTION
+// ── FIX #2: PEER CONNECTION — всегда добавляем треки ПЕРЕД созданием оффера
 async function startPeerConnection(makeOffer){
   if(pc){pc.close();pc=null}
   iceCandidateQueue=[];remoteDescSet=false;relayMode=false;clearTimeout(p2pTimer);
   pc=new RTCPeerConnection(ICE_CFG);
-  if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+
+  // ── FIX #2: гарантируем что стрим есть и треки добавлены
+  if(!localStream){
+    await setupMedia();
+  }
+  if(localStream){
+    localStream.getTracks().forEach(t=>{
+      try{pc.addTrack(t,localStream)}catch(e){}
+    });
+  }
+
   let ps=null;
   pc.ontrack=(e)=>{
-    if(e.streams&&e.streams[0])ps=e.streams[0];else{if(!ps)ps=new MediaStream();ps.addTrack(e.track)}
+    if(e.streams&&e.streams[0])ps=e.streams[0];
+    else{if(!ps)ps=new MediaStream();ps.addTrack(e.track)}
+    // ── FIX #2: сразу привязываем к обоим видео-элементам
     peerV.srcObject=ps;
     peerVCall.srcObject=ps;
     document.getElementById('peer-nocam').style.display='none';
     document.getElementById('peer-nocam-call').style.display='none';
-    const tp=()=>{peerV.play().catch(()=>setTimeout(tp,400));peerVCall.play().catch(()=>{})};tp();
+    const tryPlay=()=>{
+      peerV.play().catch(()=>setTimeout(tryPlay,400));
+      peerVCall.play().catch(()=>{});
+    };
+    tryPlay();
     e.track.onunmute=()=>{
       document.getElementById('peer-nocam').style.display='none';
       document.getElementById('peer-nocam-call').style.display='none';
-      peerV.play().catch(()=>{});peerVCall.play().catch(()=>{});
+      peerV.play().catch(()=>{});
+      peerVCall.play().catch(()=>{});
+    };
+    // ── FIX #2: если сейчас call mode — сразу показываем
+    if(currentMode==='call'){
+      peerVCall.srcObject=ps;
+      peerVCall.play().catch(()=>{});
     }
   };
   pc.onicecandidate=(e)=>{if(!e.candidate)return;const m={type:'ice',candidate:e.candidate};IS_SERVER?wsSend(m):localSend(m)};
   pc.oniceconnectionstatechange=()=>{if(pc.iceConnectionState==='failed')pc.restartIce()};
   pc.onconnectionstatechange=()=>{
     const s=pc.connectionState;
-    if(s==='connected'){clearTimeout(p2pTimer);relayMode=false;setStatus('on','Подключено ✓');sysmsg('🟢 Партнёр подключился!');addPart('Партнёр');showReconBanner(false)}
+    if(s==='connected'){
+      clearTimeout(p2pTimer);relayMode=false;
+      setStatus('on','Подключено ✓');sysmsg('🟢 Партнёр подключился!');
+      addPart('Партнёр');showReconBanner(false);
+      // ── FIX #2: при успешном подключении синхронизируем потоки
+      if(peerV.srcObject){
+        peerVCall.srcObject=peerV.srcObject;
+        if(currentMode==='call')peerVCall.play().catch(()=>{});
+      }
+      if(localStream){
+        myVCall.srcObject=localStream;
+        if(currentMode==='call')myVCall.play().catch(()=>{});
+      }
+    }
     else if(s==='connecting')setStatus('wait','Соединение...');
     else if(s==='disconnected')setStatus('wait','Разрыв...');
     else if(s==='failed'){clearTimeout(p2pTimer);enableRelayMode()}
@@ -1204,10 +980,13 @@ function handleVKState(msg){
 function startVKProgress(){stopVKProgress();vkProgressTimer=setInterval(()=>{if(vkState!=='playing')return;vkCurrentTime=Math.min(vkCurrentTime+.25,vkDuration);updateProgress(vkCurrentTime,vkDuration);if(Math.round(vkCurrentTime)%2===0)vkPostMsg({method:'getCurrentTime'})},250)}
 function stopVKProgress(){clearInterval(vkProgressTimer);vkProgressTimer=null}
 
-// YOUTUBE
+// ── FIX #1: YOUTUBE FULLSCREEN
 window.onYouTubeIframeAPIReady=function(){ytAPIReady=true;if(ytPendingId){const id=ytPendingId;ytPendingId=null;_createYTPlayer(id)}}
 function loadYouTube(videoId,orig){
   hideAllPlayers();document.getElementById('yt-wrap').style.display='block';showControls();
+  // Показываем кнопку FS для YouTube
+  const ytFs=document.getElementById('yt-fs-btn');
+  if(ytFs)ytFs.classList.add('show');
   const nm='YouTube: '+(orig&&orig.length>38?orig.slice(0,38)+'...':(orig||videoId));
   if(!playlist.find(p=>p.videoId===videoId)){playlist.push({n:nm,videoId,orig:orig||'',srcType:'youtube',isYT:true});renderPL()}
   sysmsg('🎬 YouTube...');currentSrc='youtube';
@@ -1246,6 +1025,24 @@ function handleYTState(msg){
 }
 function startYTProgress(){stopYTProgress();ytProgressTimer=setInterval(()=>{if(!ytPlayer||ytState!==1)return;const t=ytPlayer.getCurrentTime?ytPlayer.getCurrentTime():0;updateProgress(t,ytDuration)},250)}
 function stopYTProgress(){clearInterval(ytProgressTimer);ytProgressTimer=null}
+
+// ── FIX #1: YouTube fullscreen handler
+function toggleYTFullscreen(e){
+  if(e)e.stopPropagation();
+  const el=document.getElementById('yt-wrap');
+  if(!document.fullscreenElement&&!document.webkitFullscreenElement){
+    if(el.requestFullscreen){el.requestFullscreen().catch(()=>{})}
+    else if(el.webkitRequestFullscreen){el.webkitRequestFullscreen()}
+    // На мобильных iOS — открываем YT в новой вкладке для FS
+    else if(ytPlayer&&ytPlayer.getVideoData){
+      const vid=ytPlayer.getVideoData().video_id;
+      if(vid)window.open('https://www.youtube.com/watch?v='+vid,'_blank');
+    }
+  }else{
+    if(document.exitFullscreen)document.exitFullscreen();
+    else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+  }
+}
 
 // PLAYER
 function updateProgress(c,d){
@@ -1287,9 +1084,11 @@ function showControls(){
 function hideControls(){document.getElementById('vid-ctrl').classList.remove('visible');controlsVisible=false}
 function toggleControls(){if(currentMode==='call')return;if(controlsVisible)hideControls();else showControls()}
 
-// FULLSCREEN
+// FULLSCREEN (general)
 function toggleFS(e){
   if(e)e.stopPropagation();
+  // ── FIX #1: если YouTube — используем специальную функцию
+  if(document.getElementById('yt-wrap').style.display!=='none'){toggleYTFullscreen(null);return}
   const el=document.getElementById('vwrap');
   if(!document.fullscreenElement&&!document.webkitFullscreenElement){
     if(el.requestFullscreen){el.requestFullscreen().catch(()=>{});return}
@@ -1304,6 +1103,9 @@ function onFSChange(){
   const isFS=!!(document.fullscreenElement||document.webkitFullscreenElement);
   if(isFS&&window.screen&&window.screen.orientation&&window.screen.orientation.lock)window.screen.orientation.lock('landscape').catch(()=>{});
   else if(!isFS&&window.screen&&window.screen.orientation&&window.screen.orientation.unlock)window.screen.orientation.unlock();
+  // Обновляем иконку кнопки FS
+  const btn=document.getElementById('yt-fs-btn');
+  if(btn)btn.textContent=isFS?'✕ Выйти':'⛶';
 }
 
 // SOURCE
@@ -1338,6 +1140,8 @@ function hideAllPlayers(){
   document.getElementById('iframe-player').src='';document.getElementById('iframe-player').style.display='none';
   document.getElementById('yt-wrap').style.display='none';
   document.getElementById('vph').style.display='none';
+  // Скрываем кнопку FS YouTube
+  const ytFs=document.getElementById('yt-fs-btn');if(ytFs)ytFs.classList.remove('show');
   stopVKListener();stopYTProgress();updateProgress(0,0);updatePlayBtn(false);
 }
 function loadIframe(url,label,orig,srcType){
@@ -1364,7 +1168,6 @@ vid.onplay=()=>{updatePlayBtn(true);if(!syncLock)sendSync({type:'play',t:vid.cur
 vid.onpause=()=>{updatePlayBtn(false);if(!syncLock)sendSync({type:'pause',t:vid.currentTime})};
 vid.ontimeupdate=()=>{if(!syncLock)updateProgress(vid.currentTime,vid.duration||0)};
 vid.onseeked=()=>{if(!syncLock)sendSync({type:'seek',t:vid.currentTime})};
-
 function toggleMute(e){if(e)e.stopPropagation();isMuted=!isMuted;vid.muted=isMuted;document.getElementById('vc-vol-btn').textContent=isMuted?'🔇':'🔊'}
 
 // SYNC
@@ -1385,17 +1188,23 @@ function handleSync(msg){
 
 // CAM/MIC/SCREEN
 async function toggleCam(){
-  if(!localStream){toast('Нет камеры');return}
-  const t=localStream.getVideoTracks()[0];if(!t)return;
+  if(!localStream){
+    await setupMedia();
+    if(!localStream){toast('Нет камеры');return}
+  }
+  const t=localStream.getVideoTracks()[0];if(!t){toast('Нет видеодорожки');return}
   isCam=!isCam;t.enabled=isCam;
   document.getElementById('btn-cam').classList.toggle('on',isCam);
   document.getElementById('my-nocam-call').style.display=isCam?'none':'flex';
-  toast(isCam?'Камера включена':'Камера выключена');
+  toast(isCam?'📷 Камера включена':'📷 Камера выключена');
   updateCallBtns();
 }
 async function toggleMic(){
-  if(!localStream){toast('Нет микрофона');return}
-  const t=localStream.getAudioTracks()[0];if(!t)return;
+  if(!localStream){
+    await setupMedia();
+    if(!localStream){toast('Нет микрофона');return}
+  }
+  const t=localStream.getAudioTracks()[0];if(!t){toast('Нет аудиодорожки');return}
   isMic=!isMic;t.enabled=isMic;
   document.getElementById('btn-mic').classList.toggle('on',isMic);
   toast(isMic?'🎙️ Микрофон вкл':'🔇 Микрофон выкл');
