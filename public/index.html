@@ -450,53 +450,24 @@ body::after{content:'';position:fixed;inset:0;z-index:1000;pointer-events:none;b
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════════════
-//  CinemaSync v3 — клиент для кастомного WS сервера
-//
-//  ПРОТОКОЛ (клиент → сервер):
-//    create  { roomId, name, color, peerId, secret? }
-//    join    { roomId, name, color, peerId, secret? }
-//    offer   { to, sdp }
-//    answer  { to, sdp }
-//    ice     { to, candidate }
-//    sync    { payload }          — только хост
-//    chat    { text, name, color }
-//    react   { e }
-//    save-state { state }         — только хост
-//
-//  ПРОТОКОЛ (сервер → клиент):
-//    created         { roomId, peerId, secret, state, peers[] }
-//    joined          { roomId, peerId, state, peers[] }
-//    waiting-for-host { roomId, peerId }
-//    peer-joined     { id, name, color, isHost }
-//    peer-left       { id }
-//    new-host        { id }
-//    you-are-host    { secret }
-//    offer           { from, sdp }
-//    answer          { from, sdp }
-//    ice             { from, candidate }
-//    sync            { payload }
-//    chat            { text, name, color, from }
-//    react           { e }
-//    error           { msg }
-//    host-reconnected
-// ══════════════════════════════════════════════════════════════
+// CinemaSync v3 — клиент
 
 const COLORS = ['#60a5fa','#a78bfa','#34d399','#fbbf24','#f87171','#fb923c','#e879f9','#38bdf8'];
-const ICE_CFG = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
+const ICE_CFG = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}] };
 const HINTS = {youtube:'<b>YouTube:</b> youtube.com/watch?v=...',vk:'<b>VK:</b> vkvideo.ru/video-...',kinopoisk:'<b>КП:</b> kinopoisk.ru/film/...',mp4:'<b>MP4:</b> прямая ссылка на файл'};
 
 // ── СОСТОЯНИЕ ──
 let roomCode = '', myName = 'Аноним', myColor = COLORS[0], myPeerId = '';
 let isHost = false, hostSecret = '';
-let ws = null, wsReady = false;
+let ws = null;
 
-// peers[id] = { name, color, isHost, pc?, stream? }
+// peers[id] = { name, color, isHost, pc?, iceBuf[], stream? }
 const peers = {};
 let localStream = null, isCam = false, isMic = false, isMuted = false;
 let currentMode = 'cinema', currentSrc = 'youtube';
 let playlist = [], unreadMsgs = 0, activeSheet = null;
 let controlsTimer = null, controlsVisible = false, syncLock = false;
+let inRoom = false;
 
 // YT / VK
 let ytPlayer=null,ytAPIReady=false,ytPendingId=null,ytState=-1,ytDuration=0;
@@ -511,209 +482,223 @@ function landTab(t){
   document.getElementById('join-form').style.display   = t==='join'?'':'none';
 }
 
-// Авто-вход по URL (?room=ABCDEF)
+// Авто-заполнение кода из URL (?room=ABCDEF)
 (function(){
   const r = new URLSearchParams(location.search).get('room');
-  if(r && r.length === 6){ document.getElementById('j-code').value = r.toUpperCase(); landTab('join') }
+  if(r && r.length === 6){ document.getElementById('j-code').value = r.toUpperCase(); landTab('join'); }
 })();
 
 function createRoom(){
   const n = (document.getElementById('c-name').value||'').trim();
-  if(!n){ toast('Введите имя'); return }
+  if(!n){ toast('Введите имя'); return; }
   myName = n; myColor = COLORS[0]; isHost = true;
   roomCode = randCode();
   myPeerId = 'h_' + randShort();
-  connectWS(() => {
-    wsSend({ type:'create', roomId: roomCode, name: myName, color: myColor, peerId: myPeerId });
-  });
+  connectWS(() => wsSend({ type:'create', roomId:roomCode, name:myName, color:myColor, peerId:myPeerId }));
 }
 
 function doJoin(){
   const n = (document.getElementById('j-name').value||'').trim();
-  if(!n){ toast('Введите имя'); return }
+  if(!n){ toast('Введите имя'); return; }
   let v = (document.getElementById('j-code').value||'').trim();
-  const m = v.match(/[?&]room=([A-Z0-9]{6})/i) || v.match(/([A-Z0-9]{6})$/);
-  if(!m){ toast('Неверный код (6 символов)'); return }
-  roomCode = m[1].toUpperCase(); myName = n;
+  // Извлекаем код из ссылки или берём напрямую
+  const m = v.match(/[?&]room=([A-Z0-9]{6})/i) || v.match(/([A-Z0-9]{6})\s*$/i);
+  if(!m){ toast('Неверный код (6 символов)'); return; }
+  roomCode = m[1].toUpperCase();
+  myName = n;
   myColor = COLORS[1 + Math.floor(Math.random()*(COLORS.length-1))];
   myPeerId = 'g_' + randShort();
-  connectWS(() => {
-    wsSend({ type:'join', roomId: roomCode, name: myName, color: myColor, peerId: myPeerId });
-  });
+  connectWS(() => wsSend({ type:'join', roomId:roomCode, name:myName, color:myColor, peerId:myPeerId }));
 }
 
-function randCode(){ return Math.random().toString(36).slice(2,8).toUpperCase() }
-function randShort(){ return Math.random().toString(36).slice(2,8) }
+function randCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
+function randShort(){ return Math.random().toString(36).slice(2,8); }
 
-// ══ WEBSOCKET ══
+// ══════════════════════════════════════
+//  WEBSOCKET
+// ══════════════════════════════════════
 function connectWS(onOpenCb){
   setStatus('wait','Подключение...');
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${proto}://${location.host}`;
-  ws = new WebSocket(url);
+  ws = new WebSocket(`${proto}://${location.host}`);
 
   ws.onopen = () => {
-    wsReady = true;
     showRecon(false);
     if(onOpenCb) onOpenCb();
   };
 
   ws.onmessage = e => {
-    let msg; try{ msg = JSON.parse(e.data) }catch{ return }
+    let msg; try{ msg = JSON.parse(e.data); }catch{ return; }
     handleWS(msg);
   };
 
   ws.onclose = () => {
-    wsReady = false;
     setStatus('off','Разрыв соединения');
     showRecon(true);
-    // Переподключение
     setTimeout(()=>{
       connectWS(()=>{
-        if(isHost && hostSecret){
-          wsSend({ type:'join', roomId: roomCode, name: myName, color: myColor, peerId: myPeerId, secret: hostSecret });
-        } else if(roomCode){
-          wsSend({ type:'join', roomId: roomCode, name: myName, color: myColor, peerId: myPeerId });
-        }
+        if(!roomCode) return;
+        if(isHost && hostSecret)
+          wsSend({ type:'join', roomId:roomCode, name:myName, color:myColor, peerId:myPeerId, secret:hostSecret });
+        else
+          wsSend({ type:'join', roomId:roomCode, name:myName, color:myColor, peerId:myPeerId });
       });
-    }, 2000);
+    }, 2500);
   };
 
-  ws.onerror = () => {
-    setStatus('off','Ошибка подключения');
-  };
+  ws.onerror = () => {};
 }
 
-function wsSend(data){
-  if(ws && ws.readyState === 1) ws.send(JSON.stringify(data));
-}
+function wsSend(data){ if(ws && ws.readyState===1) ws.send(JSON.stringify(data)); }
 
-// ══ ОБРАБОТКА СООБЩЕНИЙ СЕРВЕРА ══
+// ══════════════════════════════════════
+//  ОБРАБОТКА СООБЩЕНИЙ СЕРВЕРА
+// ══════════════════════════════════════
 async function handleWS(msg){
   switch(msg.type){
 
-    case 'created':
-      // Мы хост (или переподключились как хост)
-      myPeerId = msg.peerId || myPeerId;
+    // ── Мы успешно стали хостом ──────────────────────────────
+    case 'created': {
+      myPeerId   = msg.peerId || myPeerId;
       hostSecret = msg.secret || '';
-      isHost = true;
-      try{ localStorage.setItem('cs_secret_'+roomCode, hostSecret) }catch(e){}
-      if(!document.getElementById('room').style.display || document.getElementById('room').style.display === 'none'){
-        enterRoom();
-      }
+      isHost     = true;
+      try{ localStorage.setItem('cs_secret_'+roomCode, hostSecret); }catch(e){}
+      if(!inRoom) enterRoom();
+      document.getElementById('tb-host-badge').style.display = '';
       setStatus('on', msg.reclaimed ? 'Переподключено ✓' : 'Хост — ожидание...');
       showRecon(false);
-      // Подключаемся к уже присутствующим пирам
-      if(msg.peers && msg.peers.length > 0){
-        msg.peers.forEach(p => { peers[p.id] = { name:p.name, color:p.color, isHost:p.isHost }; });
-        // Восстанавливаем соединения
-        msg.peers.forEach(p => initiatePeerConnection(p.id));
+      // Подключаемся к уже присутствующим пирам (хост инициирует к ним offer)
+      if(msg.peers?.length){
+        msg.peers.forEach(p => registerPeer(p.id, p.name, p.color, p.isHost));
+        await setupMedia();
+        msg.peers.forEach(p => sendOffer(p.id));
         updateCount(); buildGrid(); updateCamStrip(); rebuildInvite();
       }
       if(msg.state) restoreState(msg.state);
-      document.getElementById('tb-host-badge').style.display = '';
       rebuildInvite();
       break;
+    }
 
-    case 'joined':
-      // Мы гость, успешно вошли
+    // ── Мы успешно вошли как гость ───────────────────────────
+    case 'joined': {
       myPeerId = msg.peerId || myPeerId;
-      if(!document.getElementById('room').style.display || document.getElementById('room').style.display === 'none'){
-        enterRoom();
-      }
+      if(!inRoom) enterRoom();
       setStatus('on','Подключено ✓');
       showRecon(false);
-      if(msg.peers && msg.peers.length > 0){
-        msg.peers.forEach(p => { peers[p.id] = { name:p.name, color:p.color, isHost:p.isHost }; });
+      // Регистрируем существующих пиров — НО НЕ отправляем offer сами.
+      // Хост (и другие старшие пиры) получат peer-joined и сами инициируют к нам.
+      if(msg.peers?.length){
+        msg.peers.forEach(p => registerPeer(p.id, p.name, p.color, p.isHost));
         updateCount(); buildGrid(); updateCamStrip(); rebuildInvite();
       }
       if(msg.state) restoreState(msg.state);
       break;
+    }
 
+    // ── Ждём хоста ───────────────────────────────────────────
     case 'waiting-for-host':
       myPeerId = msg.peerId || myPeerId;
-      if(!document.getElementById('room').style.display || document.getElementById('room').style.display === 'none'){
-        enterRoom();
-      }
+      if(!inRoom) enterRoom();
       setStatus('wait','Ожидание хоста...');
-      sysmsg('⏳ Хост ещё не подключён — ожидаем...');
+      sysmsg('⏳ Хост ещё не в комнате, ждём...');
       break;
 
+    // ── Хост переподключился ─────────────────────────────────
     case 'host-reconnected':
       setStatus('on','Хост вернулся ✓'); showRecon(false);
       sysmsg('✅ Хост переподключился');
-      // Переустанавливаем WebRTC
-      Object.keys(peers).forEach(pid => { if(peers[pid].isHost) initiatePeerConnection(pid) });
+      // Хост сам пришлёт нам новый offer
       break;
 
+    // ── Новый участник вошёл ─────────────────────────────────
     case 'peer-joined': {
       const { id, name, color, isHost: pIsHost } = msg;
       if(id === myPeerId) break;
-      peers[id] = { name, color, isHost: pIsHost };
+      registerPeer(id, name, color, pIsHost);
       sysmsg('👋 ' + name + ' вошёл');
       updateCount(); buildGrid(); updateCamStrip(); rebuildInvite();
-      setStatus('on', 'Подключено ✓');
-      // Если я старший (меньший ID или хост) — инициирую соединение
-      if(shouldInitiate(id)) initiatePeerConnection(id);
+      // Инициирует тот, у кого peerId лексикографически МЕНЬШЕ
+      // (т.е. "старший" пир — обычно это хост или кто вошёл раньше)
+      if(myPeerId < id){
+        await setupMedia();
+        sendOffer(id);
+      }
       break;
     }
 
+    // ── Участник вышел ───────────────────────────────────────
     case 'peer-left': {
       const p = peers[msg.id];
-      if(p){ sysmsg('🔴 ' + p.name + ' вышел'); p.pc?.close(); delete peers[msg.id]; }
+      if(p){ sysmsg('🔴 ' + (p.name||'?') + ' вышел'); p.pc?.close(); delete peers[msg.id]; }
       updateCount(); buildGrid(); updateCamStrip(); rebuildInvite();
       break;
     }
 
-    case 'new-host': {
+    // ── Передача прав хоста ──────────────────────────────────
+    case 'new-host':
       if(peers[msg.id]) peers[msg.id].isHost = true;
       updateCount(); buildGrid(); rebuildInvite();
-      sysmsg('👑 Новый хост: ' + (peers[msg.id]?.name || '?'));
+      if(msg.id !== myPeerId) sysmsg('👑 Новый хост: ' + (peers[msg.id]?.name || '?'));
       break;
-    }
 
     case 'you-are-host':
       isHost = true; hostSecret = msg.secret || hostSecret;
-      try{ localStorage.setItem('cs_secret_'+roomCode, hostSecret) }catch(e){}
+      try{ localStorage.setItem('cs_secret_'+roomCode, hostSecret); }catch(e){}
       document.getElementById('tb-host-badge').style.display = '';
       showHostCrown(); sysmsg('👑 Вы стали хостом');
       buildGrid(); rebuildInvite();
       break;
 
-    // ── WebRTC СИГНАЛИНГ ──
+    // ── WebRTC: получили offer ───────────────────────────────
     case 'offer': {
       const from = msg.from;
-      if(!peers[from]) peers[from] = { name:'?', color:COLORS[1] };
-      const pc = getOrCreatePC(from);
-      await pc.setRemoteDescription(new RTCSessionDescription({ type:'offer', sdp:msg.sdp }));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      wsSend({ type:'answer', to:from, sdp:answer.sdp });
+      if(!peers[from]) registerPeer(from, '?', COLORS[1], false);
+      await setupMedia();
+      // Закрываем старый PC если есть
+      if(peers[from].pc) { peers[from].pc.close(); peers[from].pc = null; }
+      const pc = createPC(from);
+      try{
+        await pc.setRemoteDescription({ type:'offer', sdp:msg.sdp });
+        // Применяем накопленные ICE кандидаты
+        for(const c of (peers[from].iceBuf||[])) await pc.addIceCandidate(c).catch(()=>{});
+        peers[from].iceBuf = [];
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        wsSend({ type:'answer', to:from, sdp:answer.sdp });
+      }catch(e){ console.warn('offer/answer error', e); }
       break;
     }
 
+    // ── WebRTC: получили answer ──────────────────────────────
     case 'answer': {
       const pc = peers[msg.from]?.pc;
-      if(pc && pc.signalingState !== 'stable'){
-        await pc.setRemoteDescription(new RTCSessionDescription({ type:'answer', sdp:msg.sdp })).catch(()=>{});
+      if(pc && pc.signalingState === 'have-local-offer'){
+        try{ await pc.setRemoteDescription({ type:'answer', sdp:msg.sdp }); }catch(e){}
       }
       break;
     }
 
+    // ── WebRTC: ICE кандидат ─────────────────────────────────
     case 'ice': {
-      const pc = peers[msg.from]?.pc;
-      if(pc && msg.candidate){
-        try{ await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)) }catch(e){}
+      const p = peers[msg.from];
+      if(!p) break;
+      const candidate = new RTCIceCandidate(msg.candidate);
+      if(p.pc && p.pc.remoteDescription){
+        p.pc.addIceCandidate(candidate).catch(()=>{});
+      } else {
+        // Буферизуем до установки remoteDescription
+        if(!p.iceBuf) p.iceBuf = [];
+        p.iceBuf.push(candidate);
       }
       break;
     }
 
-    // ── СИНХРОНИЗАЦИЯ ──
+    // ── Синхронизация видео ──────────────────────────────────
     case 'sync':
       handleSync(msg.payload);
       break;
 
-    // ── ЧАТ / РЕАКЦИИ ──
+    // ── Чат / Реакции ────────────────────────────────────────
     case 'chat':
       addMsg(msg.text, 'them', msg.name, msg.color);
       break;
@@ -723,70 +708,77 @@ async function handleWS(msg){
       break;
 
     case 'error':
-      toast('❌ ' + (msg.msg || 'Ошибка')); break;
+      toast('❌ ' + (msg.msg || 'Ошибка'));
+      break;
 
     case 'host-disconnected':
       setStatus('wait','Хост отключился'); showRecon(true);
-      sysmsg('⚠️ Хост потерял соединение — ждём...');
+      sysmsg('⚠️ Ждём хоста...');
       break;
   }
 }
 
-// ── ОПРЕДЕЛЯЕМ КТО ИНИЦИИРУЕТ WebRTC ──
-// Тот у кого peerId «меньше» (лексикографически) → инициирует
-function shouldInitiate(remotePeerId){ return myPeerId < remotePeerId || isHost }
+// ── Регистрируем пира в таблице ──
+function registerPeer(id, name, color, pIsHost){
+  if(!peers[id]) peers[id] = { iceBuf:[] };
+  peers[id].name   = name  || peers[id].name  || '?';
+  peers[id].color  = color || peers[id].color || COLORS[1];
+  peers[id].isHost = !!pIsHost;
+}
 
-// ══ WebRTC ══
-function getOrCreatePC(peerId){
-  if(peers[peerId]?.pc) return peers[peerId].pc;
-  if(!peers[peerId]) peers[peerId] = { name:'?', color:COLORS[1] };
-
+// ══════════════════════════════════════
+//  WebRTC
+// ══════════════════════════════════════
+function createPC(peerId){
   const pc = new RTCPeerConnection(ICE_CFG);
   peers[peerId].pc = pc;
 
-  // Добавляем локальные треки
+  // Локальные треки
   if(localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-  // Получаем удалённый стрим
-  const remoteStream = new MediaStream();
-  peers[peerId].stream = remoteStream;
+  // Удалённый стрим
+  const rs = new MediaStream();
+  peers[peerId].stream = rs;
   pc.ontrack = e => {
-    remoteStream.addTrack(e.track);
-    peers[peerId].stream = remoteStream;
+    e.streams[0]?.getTracks().forEach(t => rs.addTrack(t));
+    peers[peerId].stream = rs;
     buildGrid(); updateCamStrip();
     setStatus('on','Видеозвонок ✓');
   };
 
-  // ICE кандидаты
+  // ICE
   pc.onicecandidate = e => {
     if(e.candidate) wsSend({ type:'ice', to:peerId, candidate:e.candidate.toJSON() });
   };
 
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
-    if(s === 'connected') setStatus('on','Подключено ✓');
-    if(s === 'disconnected' || s === 'failed'){
-      // Пытаемся восстановить
-      setTimeout(() => { if(peers[peerId]?.pc === pc) initiatePeerConnection(peerId) }, 3000);
+    if(s === 'connected'){ setStatus('on','Подключено ✓'); }
+    if(s === 'failed'){
+      // Реконнект через 3с
+      setTimeout(async () => {
+        if(peers[peerId]?.pc === pc){
+          peers[peerId].pc.close();
+          peers[peerId].pc = null;
+          if(myPeerId < peerId){ await setupMedia(); sendOffer(peerId); }
+        }
+      }, 3000);
     }
   };
 
   return pc;
 }
 
-async function initiatePeerConnection(peerId){
-  if(!localStream) await setupMedia();
-  const pc = getOrCreatePC(peerId);
-  // Убеждаемся что локальные треки добавлены
-  const senders = pc.getSenders();
-  if(localStream && senders.length === 0){
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  }
+async function sendOffer(peerId){
+  if(!peers[peerId]) return;
+  // Закрыть старый
+  if(peers[peerId].pc){ peers[peerId].pc.close(); peers[peerId].pc = null; }
+  const pc = createPC(peerId);
   try{
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     wsSend({ type:'offer', to:peerId, sdp:offer.sdp });
-  }catch(e){ console.warn('Offer failed:', e) }
+  }catch(e){ console.warn('sendOffer failed', e); }
 }
 
 // ── MEDIA ──
@@ -907,11 +899,13 @@ function updateCount(){ document.getElementById('pcount').textContent = Object.k
 
 // ══ ENTER ROOM ══
 function enterRoom(){
+  if(inRoom) return;
+  inRoom = true;
   document.getElementById('landing').style.display = 'none';
   document.getElementById('room').style.display = 'flex';
   document.getElementById('room-id').textContent = roomCode;
-  try{ history.replaceState({},'','/?room='+roomCode) }catch(e){}
-  setupMedia().then(()=>{ buildGrid(); updateCamStrip(); rebuildVideo(); rebuildInvite() });
+  try{ history.replaceState({},'','/?room='+roomCode); }catch(e){}
+  setupMedia().then(()=>{ buildGrid(); updateCamStrip(); rebuildVideo(); rebuildInvite(); });
 }
 
 // ══ MODE ══
