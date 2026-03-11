@@ -785,13 +785,15 @@ let isCam=false, isMic=false, isScreen=false, isMuted=false, peerMuted=false;
 let syncLock=false, relayMode=false;
 let iceCandidateQueue=[], remoteDescSet=false;
 let p2pTimer=null;
-const P2P_TIMEOUT = 15000; // FIX: увеличен таймаут
-
+const P2P_TIMEOUT = 15000;
 let wsReconTimer=null, wsReconDelay=1000, wsManualClose=false;
 let controlsTimer=null, controlsVisible=false;
 let unreadMsgs=0, activeSheet=null;
 let playlist=[], currentSrc='youtube';
 let mediaSetupDone=false;
+
+// Лог в чат для отладки (убрать в продакшене)
+// debug removed
 
 // YT
 let ytPlayer=null, ytAPIReady=false, ytPendingId=null, ytState=-1, ytDuration=0;
@@ -831,50 +833,27 @@ function enterRoom(){
   ['m-ilink','d-ilink'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=link});
   if(IS_SERVER)try{history.replaceState({},'','/?room='+roomId)}catch(e){}
   saveSession();
-  if(IS_SERVER) setupWS();
-  else{setStatus('wait','Локальный режим');setupLocalMode();setupMedia().catch(()=>{});toast('Код: '+roomId)}
+  if(IS_SERVER){ setupMedia(); setupWS(); }
+  else{setStatus('wait','Локальный режим');setupMedia();setupLocalMode();toast('Код: '+roomId)}
 }
 
-// ── MEDIA — FIX: улучшена обработка, добавлен fallback
-// ── MEDIA — с таймаутом чтобы не зависнуть
-let mediaSetupPromise = null;
-
-// ensureMedia — безопасный вызов, не блокирует если уже есть стрим
-function ensureMedia(){
-  if(localStream) return Promise.resolve(localStream);
-  return setupMedia();
-}
-
-async function setupMedia(){
-  if(mediaSetupDone && localStream) return localStream;
-  if(mediaSetupPromise) return mediaSetupPromise; // не запускаем дважды
-
+// ── MEDIA
+// Fire-and-forget — не блокирует signaling
+function setupMedia(){
+  if(mediaSetupDone) return;
   mediaSetupDone = true;
-  mediaSetupPromise = _doSetupMedia();
-  const result = await mediaSetupPromise;
-  mediaSetupPromise = null;
-  return result;
+  _doSetupMedia();
 }
 
 async function _doSetupMedia(){
-  // Таймаут 8 секунд на всё — если пользователь не ответил на диалог, продолжаем без медиа
-  const withTimeout = (promise, ms) => Promise.race([
-    promise,
-    new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))
-  ]);
-
   const attempts = [
-    {video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}},
-    {video:true, audio:{echoCancellation:true,noiseSuppression:true}},
-    {video:false, audio:true}
+    {video:{width:{ideal:640},height:{ideal:480}},audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}},
+    {video:true,audio:true},
+    {video:false,audio:true}
   ];
-
-  for(const constraints of attempts){
+  for(const c of attempts){
     try{
-      const stream = await withTimeout(
-        navigator.mediaDevices.getUserMedia(constraints),
-        8000
-      );
+      const stream = await navigator.mediaDevices.getUserMedia(c);
       localStream = stream;
       myV.srcObject = stream;
       myV.play().catch(()=>{});
@@ -882,27 +861,19 @@ async function _doSetupMedia(){
       isMic = stream.getAudioTracks().length > 0;
       document.getElementById('btn-cam').classList.toggle('on', isCam);
       document.getElementById('btn-mic').classList.toggle('on', isMic);
-      if(!isCam) toast('⚠️ Камера недоступна');
-      // Если peer connection уже создан — добавляем треки
-      if(pc && pc.connectionState !== 'closed'){
-        stream.getTracks().forEach(track=>{
-          try{
-            const existing = pc.getSenders().find(s=>s.track&&s.track.kind===track.kind);
-            if(!existing) pc.addTrack(track, stream);
-          }catch(e){}
+      // Добавляем треки если pc уже создан к этому моменту
+      if(pc && pc.signalingState !== 'closed'){
+        stream.getTracks().forEach(t=>{
+          if(!pc.getSenders().find(s=>s.track?.kind===t.kind))
+            try{pc.addTrack(t, stream)}catch(e){}
         });
       }
-      return stream;
-    }catch(e){
-      if(e.message==='timeout'){toast('⚠️ Разрешите доступ к камере/микрофону');break}
-    }
+      return;
+    }catch(e){}
   }
-
-  localStream = null;
-  document.getElementById('btn-cam').classList.remove('on');
-  document.getElementById('btn-mic').classList.remove('on');
-  return null;
+  console.log('[media] unavailable, continuing without');
 }
+
 
 // ── LOCAL MODE (BroadcastChannel)
 let localBC = null;
@@ -935,23 +906,18 @@ function setupWS(){
   ws.onopen=()=>{
     wsReconDelay=1000;
     showReconBanner(false);
+    console.log('[WS] open, isHost='+isHost+' roomId='+roomId);
 
-    // КЛЮЧЕВОЙ ФИX: сначала регистрируемся на сервере, медиа — потом и независимо
     if(isHost){
       ws.send(JSON.stringify({type:'create',roomId,secret:hostSecret||''}));
     }else{
       const s=loadSession();
       if(s && s.secret && s.roomId===roomId && s.isHost){
-        isHost=true;hostSecret=s.secret;
+        isHost=true; hostSecret=s.secret;
         ws.send(JSON.stringify({type:'join',roomId,secret:hostSecret}));
       }else{
         ws.send(JSON.stringify({type:'join',roomId,secret:''}));
       }
-    }
-
-    // Медиа запрашиваем параллельно — не блокируем WS
-    if(!localStream && !mediaSetupDone){
-      setupMedia().catch(()=>{});
     }
   };
 
@@ -972,22 +938,23 @@ function setupWS(){
 }
 
 async function handleWsMessage(msg){
+  console.log('[WS←]', msg.type);
   switch(msg.type){
+
     case 'created':
       if(msg.secret){hostSecret=msg.secret;saveSession()}
       isHost=true;
       showReconBanner(false);
       setStatus('wait', msg.reclaimed?'Переподключились ✓':'Ожидание партнёра...');
-      sysmsg(msg.reclaimed?'🔄 Переподключились к комнате':'🔗 Комната создана! Отправьте ссылку.');
+      sysmsg(msg.reclaimed?'🔄 Переподключились':'🔗 Комната создана! Отправьте ссылку.');
       if(msg.state) restoreState(msg.state);
       break;
 
     case 'joined':
       showReconBanner(false);
-      setStatus('wait','Установка соединения...');
+      setStatus('wait','В комнате, ждём хоста...');
+      sysmsg('✅ В комнате! Ждём видеосвязь...');
       if(msg.state) restoreState(msg.state);
-      // FIX: запрашиваем актуальное состояние у хоста
-      setTimeout(()=>wsSend({type:'request-state'}), 1500);
       break;
 
     case 'waiting-for-host':
@@ -1006,8 +973,6 @@ async function handleWsMessage(msg){
       showReconBanner(false);
       setStatus('wait','Соединяемся...');
       sysmsg('✅ Хост вернулся!');
-      // FIX: перезапускаем peer connection
-      setTimeout(()=>initPeerConnection(false), 500);
       break;
 
     case 'error':
@@ -1015,35 +980,42 @@ async function handleWsMessage(msg){
       setStatus('off', msg.msg);
       break;
 
+    // Хост получил сигнал что гость зашёл → делаем offer
     case 'guest-joined':
       showReconBanner(false);
-      sysmsg('👋 Партнёр входит...');
-      // Дожидаемся медиа, потом создаём offer
-      ensureMedia().then(()=>initPeerConnection(true));
+      sysmsg('👋 Партнёр в комнате...');
+      setStatus('wait','Устанавливаем связь...');
+      await initPeerConnection(true);
       break;
 
-    case 'offer':
-      // Гость получил offer — дожидаемся медиа, отвечаем
-      ensureMedia().then(async()=>{
-        await initPeerConnection(false);
-        try{
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-          remoteDescSet=true;
-          await flushIceQueue();
-          const ans=await pc.createAnswer();
-          await pc.setLocalDescription(ans);
-          wsSend({type:'answer',sdp:ans});
-        }catch(err){console.error('offer err',err);enableRelayMode()}
-      });
+    // Гость получил offer от хоста → делаем answer
+    case 'offer': {
+      const offerSdp = msg.sdp;
+      await initPeerConnection(false);
+      try{
+        await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+        remoteDescSet=true;
+        await flushIceQueue();
+        const ans=await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        wsSend({type:'answer',sdp:ans});
+        console.log('[WS→] answer sent');
+      }catch(err){
+        console.error('[offer] err:', err);
+        enableRelayMode();
+      }
       break;
+    }
 
+    // Хост получил answer от гостя
     case 'answer':
-      if(!pc)return;
+      if(!pc){console.warn('[answer] no pc!');return}
       try{
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
         remoteDescSet=true;
         await flushIceQueue();
-      }catch(err){console.error('answer err',err)}
+        console.log('[answer] remote desc set');
+      }catch(err){console.error('[answer] err:', err)}
       break;
 
     case 'ice':
@@ -1056,7 +1028,7 @@ async function handleWsMessage(msg){
       break;
 
     case 'relay-mode':
-      if(!relayMode){relayMode=true;setStatus('on','Relay ✓');sysmsg('⚡ Через сервер')}
+      if(!relayMode){relayMode=true;setStatus('on','Relay ✓');sysmsg('⚡ Связь через сервер')}
       break;
 
     case 'peer-left':
@@ -1068,7 +1040,6 @@ async function handleWsMessage(msg){
       break;
 
     case 'request-state':
-      // FIX: хост отвечает на запрос состояния
       if(isHost){const s=getCurrentPlayerState();if(s)wsSend({type:'state-response',state:s})}
       break;
 
@@ -1142,7 +1113,8 @@ async function flushIceQueue(){
 }
 
 // ── PEER CONNECTION
-async function initPeerConnection(makeOffer){
+function initPeerConnection(makeOffer){
+  // Закрываем старое
   if(pc){try{pc.close()}catch(e){}pc=null;}
   iceCandidateQueue=[];
   remoteDescSet=false;
@@ -1150,62 +1122,53 @@ async function initPeerConnection(makeOffer){
   clearTimeout(p2pTimer);
   dc=null;
 
-  pc=new RTCPeerConnection(ICE_CFG);
+  console.log('[SIG] initPeerConnection makeOffer='+makeOffer);
 
+  pc = new RTCPeerConnection(ICE_CFG);
+
+  // Добавляем треки если медиа уже есть
   if(localStream){
-    localStream.getTracks().forEach(track=>{
-      try{pc.addTrack(track, localStream)}catch(e){}
-    });
+    localStream.getTracks().forEach(t=>{try{pc.addTrack(t,localStream)}catch(e){}});
   }
 
+  // Входящие треки
   const remoteStream = new MediaStream();
   peerV.srcObject = remoteStream;
-
   pc.ontrack=(e)=>{
-    const tracks = e.streams[0]?.getTracks() || [e.track];
-    tracks.forEach(t=>{
+    (e.streams[0]?.getTracks()||[e.track]).forEach(t=>{
       if(!remoteStream.getTrackById(t.id)) remoteStream.addTrack(t);
     });
-    const tryPlay=()=>{
-      peerV.play().then(()=>{
-        document.getElementById('peer-nocam').style.display='none';
-      }).catch(err=>{
-        // NotAllowedError на iOS — нужен user gesture
-        if(err.name!=='NotAllowedError') setTimeout(tryPlay, 600);
-      });
-    };
+    const tryPlay=()=>peerV.play()
+      .then(()=>document.getElementById('peer-nocam').style.display='none')
+      .catch(err=>{ if(err.name!=='NotAllowedError') setTimeout(tryPlay,600); });
     tryPlay();
   };
 
   pc.onicecandidate=(e)=>{
-    if(!e.candidate)return;
-    const m={type:'ice',candidate:e.candidate};
-    IS_SERVER ? wsSend(m) : localSend(m);
+    if(!e.candidate) return;
+    IS_SERVER ? wsSend({type:'ice',candidate:e.candidate}) : localSend({type:'ice',candidate:e.candidate});
   };
 
   pc.oniceconnectionstatechange=()=>{
-    const s=pc.iceConnectionState;
-    console.log('[ICE]', s);
-    if(s==='failed'){try{pc.restartIce()}catch(e){enableRelayMode()}}
-    if(s==='disconnected'){setStatus('wait','Разрыв...')}
+    console.log('[ICE] '+pc.iceConnectionState);
+    if(pc.iceConnectionState==='failed') try{pc.restartIce()}catch(e){enableRelayMode();}
+    if(pc.iceConnectionState==='disconnected') setStatus('wait','Разрыв...');
   };
 
   pc.onconnectionstatechange=()=>{
-    const s=pc.connectionState;
-    console.log('[PC]', s);
-    if(s==='connected'){
+    console.log('[PC] '+pc.connectionState);
+    if(pc.connectionState==='connected'){
       clearTimeout(p2pTimer);
-      relayMode=false;
       setStatus('on','Подключено ✓');
-      sysmsg('🟢 Партнёр подключился!');
+      sysmsg('🟢 Подключено!');
       addPart('Партнёр');
       showReconBanner(false);
-    }else if(s==='connecting'){
+    } else if(pc.connectionState==='connecting'){
       setStatus('wait','Соединение...');
-    }else if(s==='disconnected'){
+    } else if(pc.connectionState==='disconnected'){
       setStatus('wait','Разрыв...');
-      setTimeout(()=>{if(pc && pc.connectionState==='disconnected') enableRelayMode()}, 4000);
-    }else if(s==='failed'){
+      setTimeout(()=>{if(pc&&pc.connectionState==='disconnected') enableRelayMode();},4000);
+    } else if(pc.connectionState==='failed'){
       clearTimeout(p2pTimer);
       enableRelayMode();
     }
@@ -1214,26 +1177,22 @@ async function initPeerConnection(makeOffer){
   if(makeOffer){
     dc=pc.createDataChannel('sync',{ordered:true});
     setupDC(dc);
-    try{
-      const offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
-      await pc.setLocalDescription(offer);
-      IS_SERVER ? wsSend({type:'offer',sdp:offer}) : localSend({type:'offer',sdp:offer});
-    }catch(err){
-      console.error('createOffer err', err);
-      enableRelayMode();
-      return;
-    }
+    return pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true})
+      .then(offer=>pc.setLocalDescription(offer).then(()=>offer))
+      .then(offer=>{
+        console.log('[SIG] offer sent');
+        IS_SERVER ? wsSend({type:'offer',sdp:offer}) : localSend({type:'offer',sdp:offer});
+        p2pTimer=setTimeout(()=>{
+          if(pc&&pc.connectionState!=='connected'){console.log('[P2P] timeout, relay');enableRelayMode();}
+        }, P2P_TIMEOUT);
+      })
+      .catch(err=>{console.error('[SIG] createOffer err',err);enableRelayMode();});
+  } else {
+    pc.ondatachannel=(e)=>{dc=e.channel;setupDC(dc);};
     p2pTimer=setTimeout(()=>{
-      if(pc && pc.connectionState!=='connected'){
-        console.log('[P2P] timeout — relay fallback');
-        enableRelayMode();
-      }
+      if(pc&&pc.connectionState!=='connected'){console.log('[P2P] timeout, relay');enableRelayMode();}
     }, P2P_TIMEOUT);
-  }else{
-    pc.ondatachannel=(e)=>{dc=e.channel;setupDC(dc)};
-    p2pTimer=setTimeout(()=>{
-      if(pc && pc.connectionState!=='connected') enableRelayMode();
-    }, P2P_TIMEOUT);
+    return Promise.resolve();
   }
 }
 
@@ -1634,7 +1593,7 @@ function handleSync(msg){
 async function toggleCam(){
   if(!localStream){
     // FIX: пробуем запросить медиа повторно
-    await setupMedia();if(!localStream){toast('⚠️ Нет камеры');return}
+    mediaSetupDone=false; await _doSetupMedia();if(!localStream){toast('⚠️ Нет камеры');return}
   }
   const t=localStream.getVideoTracks()[0];if(!t){toast('⚠️ Нет видео');return}
   isCam=!isCam;t.enabled=isCam;
@@ -1644,7 +1603,7 @@ async function toggleCam(){
 
 async function toggleMic(){
   if(!localStream){
-    await setupMedia();if(!localStream){toast('⚠️ Нет микрофона');return}
+    mediaSetupDone=false; await _doSetupMedia();if(!localStream){toast('⚠️ Нет микрофона');return}
   }
   const t=localStream.getAudioTracks()[0];if(!t){toast('⚠️ Нет аудио');return}
   isMic=!isMic;t.enabled=isMic;
