@@ -230,6 +230,7 @@ let currentFacingMode='user';
 let pipSizeIdx=1;
 const pipSizes=['pip-small','','pip-large'];
 let mediaSetupDone=false;
+let mediaPromise=null;
 
 const myVid=document.getElementById('my-video');
 const peerVid=document.getElementById('peer-video');
@@ -247,8 +248,13 @@ const peerVid=document.getElementById('peer-video');
 })();
 
 // ── MEDIA
-async function setupMedia(){
-  if(mediaSetupDone) return; mediaSetupDone=true;
+function setupMedia(){
+  if(mediaSetupDone) return mediaPromise;
+  mediaSetupDone=true;
+  mediaPromise=_doSetupMedia();
+  return mediaPromise;
+}
+async function _doSetupMedia(){
   const attempts=[
     {video:{facingMode:currentFacingMode,width:{ideal:640},height:{ideal:480}},audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}},
     {video:{facingMode:currentFacingMode},audio:true},{video:true,audio:true},{video:false,audio:true}
@@ -383,16 +389,22 @@ async function handleWsMsg(msg){
       break;
     case 'joined':
       showWaitBanner(false);setStatus('wait','Устанавливаем связь...');
-      isInitiator=false;relayMode=false;await initPC(false);
+      isInitiator=false;relayMode=false;
+      await setupMedia();
+      await initPC(false);
       break;
     case 'peer-joined':
       showWaitBanner(false);setStatus('wait','Устанавливаем связь...');
-      isInitiator=true;relayMode=false;await initPC(true);
+      isInitiator=true;relayMode=false;
+      await setupMedia();
+      await initPC(true);
       break;
     case 'room-full':
       toast('❌ Комната уже занята');setStatus('off','Комната занята');break;
     case 'offer':
-      relayMode=false;isInitiator=false;await initPC(false);
+      relayMode=false;isInitiator=false;
+      await setupMedia();
+      await initPC(false);
       try{await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));remoteDescSet=true;await flushIceQ();const ans=await pc.createAnswer();await pc.setLocalDescription(ans);wsSend({type:'answer',sdp:ans});}
       catch(e){enableRelay();}break;
     case 'answer':
