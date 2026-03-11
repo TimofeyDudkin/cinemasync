@@ -838,10 +838,12 @@ function enterRoom(){
 }
 
 // ── MEDIA
+let mediaPromise = null;
 function setupMedia(){
-  if(mediaSetupDone) return;
+  if(mediaSetupDone) return mediaPromise;
   mediaSetupDone = true;
-  _doSetupMedia();
+  mediaPromise = _doSetupMedia();
+  return mediaPromise;
 }
 async function _doSetupMedia(){
   const attempts = [
@@ -935,6 +937,7 @@ async function handleWsMessage(msg){
       showWaitBanner(false);
       isInitiator = false;
       relayMode = false;
+      await setupMedia(); // убедимся что медиа готово
       await initPeerConnection(false);
       if(msg.state) restoreState(msg.state);
       break;
@@ -946,6 +949,7 @@ async function handleWsMessage(msg){
       setStatus('wait','Устанавливаем связь...');
       isInitiator = true;
       relayMode = false;
+      await setupMedia(); // убедимся что медиа готово
       await initPeerConnection(true);
       break;
 
